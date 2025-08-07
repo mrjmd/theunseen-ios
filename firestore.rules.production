@@ -1,0 +1,76 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user owns the document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Helper function to check if request is from Cloud Function
+    function isCloudFunction() {
+      return request.auth.token.admin == true;
+    }
+    
+    // Users collection rules (PRODUCTION - Strict)
+    match /users/{userId} {
+      // Users can only read their own document
+      allow read: if isOwner(userId);
+      
+      // Users can create their own document
+      allow create: if isOwner(userId) && 
+        // Must have required fields
+        request.resource.data.keys().hasAll(['uid', 'level', 'animaPoints', 'createdAt']);
+      
+      // Only Cloud Functions can update ANIMA points
+      allow update: if isOwner(userId) && 
+        // If ANIMA is being changed, must be Cloud Function
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['animaPoints', 'level']) ||
+         isCloudFunction());
+      
+      // Users cannot delete their profiles
+      allow delete: if false;
+    }
+    
+    // Sessions collection rules (PRODUCTION)
+    match /sessions/{sessionId} {
+      // Cloud Functions create sessions
+      allow create: if isCloudFunction() || 
+        (isAuthenticated() && 
+         request.resource.data.keys().hasAll(['userA_Id', 'userB_Id', 'status', 'createdAt']) &&
+         (request.resource.data.userA_Id == request.auth.uid || 
+          request.resource.data.userB_Id == request.auth.uid));
+      
+      // Users can read their own sessions
+      allow read: if isAuthenticated() && 
+        (resource.data.userA_Id == request.auth.uid || 
+         resource.data.userB_Id == request.auth.uid);
+      
+      // Only Cloud Functions can update sessions
+      allow update: if isCloudFunction();
+      
+      // Sessions are permanent
+      allow delete: if false;
+    }
+    
+    // Block/Report collection
+    match /reports/{reportId} {
+      // Users can create reports
+      allow create: if isAuthenticated() && 
+        request.resource.data.reporter_Id == request.auth.uid &&
+        request.resource.data.keys().hasAll(['reporter_Id', 'reported_Id', 'session_Id', 'reason', 'createdAt']);
+      
+      // Only admins can read reports
+      allow read: if isCloudFunction();
+      
+      // Reports are immutable
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}

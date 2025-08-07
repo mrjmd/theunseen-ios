@@ -23,6 +23,11 @@ class P2PConnectivityService: NSObject, ObservableObject {
     private let reconnectionDelay: TimeInterval = 5.0  // Increased to 5 seconds for stability
     private var hasAwardedAnimaForSession = false
     private let minimumInteractionMessages = 3  // Require at least 3 message exchanges for ANIMA
+    
+    // Keepalive mechanism
+    private var keepaliveTimer: Timer?
+    private let keepaliveInterval: TimeInterval = 5.0  // Send keepalive every 5 seconds
+    private let keepaliveMessage = "[KEEPALIVE]"
 
     lazy var session: MCSession = {
         let session = MCSession(peer: myPeerID, securityIdentity: nil, encryptionPreference: .required)
@@ -37,6 +42,8 @@ class P2PConnectivityService: NSObject, ObservableObject {
     
     deinit {
         stopDiscovery()
+        stopKeepalive()
+        reconnectionTimer?.invalidate()
         session.disconnect()
     }
     
@@ -125,6 +132,12 @@ class P2PConnectivityService: NSObject, ObservableObject {
 
         if noiseService.isHandshakeComplete() {
             if let decryptedText = noiseService.decrypt(data) {
+                // Ignore keepalive messages
+                if decryptedText == keepaliveMessage {
+                    print("📡 Keepalive received from \(peerID.displayName)")
+                    return
+                }
+                
                 print("🎉 Decrypted message: \(decryptedText)")
                 DispatchQueue.main.async {
                     self.messages.append(ChatMessage(text: decryptedText))
@@ -204,6 +217,7 @@ extension P2PConnectivityService: MCSessionDelegate {
                 self.stopDiscovery() // Stop both advertiser and browser
                 self.connectedPeer = peerID
                 self.initiateHandshake(for: peerID)
+                self.startKeepalive()  // Start sending keepalive messages
                 
                 if let data = self.pendingData[peerID] {
                     print("Processing queued data for \(peerID.displayName)")
@@ -233,6 +247,7 @@ extension P2PConnectivityService: MCSessionDelegate {
                     self.sessionStartTime = nil
                     self.hasAwardedAnimaForSession = false
                     self.messages.removeAll() // Clear messages on disconnect
+                    self.stopKeepalive()  // Stop keepalive timer
                     
                     // Schedule reconnection with delay to prevent flapping
                     self.scheduleReconnection()
@@ -302,5 +317,30 @@ extension P2PConnectivityService: MCSessionDelegate {
         firestoreService.awardAnimaForConnection()
         
         print("✨ Meaningful interaction achieved! ANIMA awarded after \(messages.count) messages.")
+    }
+    
+    // Keepalive mechanism to prevent connection timeout
+    private func startKeepalive() {
+        stopKeepalive()  // Ensure no duplicate timers
+        
+        keepaliveTimer = Timer.scheduledTimer(withTimeInterval: keepaliveInterval, repeats: true) { [weak self] _ in
+            guard let self = self,
+                  let peerID = self.session.connectedPeers.first,
+                  let noiseService = self.noiseServices[peerID],
+                  self.isHandshakeComplete else {
+                print("⚠️ Cannot send keepalive - not properly connected")
+                return
+            }
+            
+            if let encryptedData = noiseService.encrypt(self.keepaliveMessage) {
+                self.send(data: encryptedData, to: peerID)
+                print("📡 Keepalive sent to \(peerID.displayName)")
+            }
+        }
+    }
+    
+    private func stopKeepalive() {
+        keepaliveTimer?.invalidate()
+        keepaliveTimer = nil
     }
 }
