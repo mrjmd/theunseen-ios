@@ -13,7 +13,6 @@ class P2PConnectivityService: NSObject, ObservableObject {
     private var serviceBrowser: MCNearbyServiceBrowser!
     
     private var noiseServices: [MCPeerID: NoiseService] = [:]
-    // This queue will hold data that arrives before the session is fully ready.
     private var pendingData: [MCPeerID: Data] = [:]
 
     lazy var session: MCSession = {
@@ -24,6 +23,12 @@ class P2PConnectivityService: NSObject, ObservableObject {
 
     override init() {
         super.init()
+        startDiscovery()
+    }
+    
+    // Encapsulate starting both advertiser and browser
+    private func startDiscovery() {
+        print("Starting discovery...")
         self.serviceAdvertiser = MCNearbyServiceAdvertiser(peer: myPeerID, discoveryInfo: nil, serviceType: serviceType)
         self.serviceAdvertiser.delegate = self
         self.serviceAdvertiser.startAdvertisingPeer()
@@ -31,6 +36,13 @@ class P2PConnectivityService: NSObject, ObservableObject {
         self.serviceBrowser = MCNearbyServiceBrowser(peer: myPeerID, serviceType: serviceType)
         self.serviceBrowser.delegate = self
         self.serviceBrowser.startBrowsingForPeers()
+    }
+    
+    // Encapsulate stopping both advertiser and browser
+    private func stopDiscovery() {
+        print("Stopping discovery...")
+        self.serviceAdvertiser.stopAdvertisingPeer()
+        self.serviceBrowser.stopBrowsingForPeers()
     }
     
     func send(data: Data, to peer: MCPeerID) {
@@ -57,7 +69,6 @@ class P2PConnectivityService: NSObject, ObservableObject {
 
     private func initiateHandshake(for peerID: MCPeerID) {
         let isInitiator = myPeerID.displayName < peerID.displayName
-        
         let role: NoiseService.HandshakeRole = isInitiator ? .initiator : .responder
         print("I am the \(role).")
         
@@ -71,10 +82,9 @@ class P2PConnectivityService: NSObject, ObservableObject {
         }
     }
     
-    // This new function will process data, either immediately or from the queue.
     private func processReceivedData(_ data: Data, from peerID: MCPeerID) {
         guard let noiseService = noiseServices[peerID] else {
-            print("Error: No NoiseService found for peer \(peerID.displayName)")
+            print("Error: No NoiseService found for peer \(peerID.displayName) during processing.")
             return
         }
 
@@ -114,12 +124,13 @@ extension P2PConnectivityService: MCNearbyServiceAdvertiserDelegate {
 
 extension P2PConnectivityService: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String : String]?) {
-        browser.invitePeer(peerID, to: self.session, withContext: nil, timeout: 10)
+        // Only invite if we're not already connected or connecting.
+        if session.connectedPeers.isEmpty {
+            browser.invitePeer(peerID, to: self.session, withContext: nil, timeout: 10)
+        }
     }
 
-    func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
-        // Delegate not needed, session state is more reliable.
-    }
+    func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {}
 }
 
 extension P2PConnectivityService: MCSessionDelegate {
@@ -128,11 +139,10 @@ extension P2PConnectivityService: MCSessionDelegate {
             switch state {
             case .connected:
                 print("Connected to: \(peerID.displayName)")
-                self.serviceBrowser.stopBrowsingForPeers()
+                self.stopDiscovery() // Stop both advertiser and browser
                 self.connectedPeer = peerID
                 self.initiateHandshake(for: peerID)
                 
-                // After setting up the handshake, check for and process any queued data.
                 if let data = self.pendingData[peerID] {
                     print("Processing queued data for \(peerID.displayName)")
                     self.processReceivedData(data, from: peerID)
@@ -145,12 +155,14 @@ extension P2PConnectivityService: MCSessionDelegate {
             case .notConnected:
                 print("Not connected to: \(peerID.displayName)")
                 self.noiseServices.removeValue(forKey: peerID)
-                self.pendingData.removeValue(forKey: peerID) // Clear pending data on disconnect
+                self.pendingData.removeValue(forKey: peerID)
                 if self.connectedPeer == peerID {
                     self.connectedPeer = nil
                     self.isHandshakeComplete = false
                 }
-                self.serviceBrowser.startBrowsingForPeers()
+                // We no longer automatically restart discovery here.
+                // This prevents the connection from "flapping".
+                // The session is considered over.
                 
             @unknown default:
                 print("Unknown state received: \(state)")
@@ -159,12 +171,10 @@ extension P2PConnectivityService: MCSessionDelegate {
     }
 
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
-        // If the noise service isn't ready yet, queue the data.
         if noiseServices[peerID] == nil {
             print("Queuing data from \(peerID.displayName), session not fully established.")
             pendingData[peerID] = data
         } else {
-            // Otherwise, process it immediately.
             processReceivedData(data, from: peerID)
         }
     }
