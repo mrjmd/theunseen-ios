@@ -36,13 +36,7 @@ struct TheUnseenApp: App {
                         firestoreService.createUserIfNeeded(uid: user.uid)
                     }
                 }
-                // We now react to the handshake completing, not just the connection.
-                .onReceive(p2pService.$isHandshakeComplete) { isComplete in
-                    if isComplete {
-                        // Award ANIMA only after a secure channel is established.
-                        firestoreService.awardAnimaForConnection()
-                    }
-                }
+                // ANIMA is now awarded in P2PConnectivityService after meaningful interaction
         }
     }
 }

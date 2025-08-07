@@ -26,9 +26,10 @@ struct ChatView: View {
                     .padding(.leading)
                 
                 Button(action: {
+                    // Message tracking is now handled in P2PConnectivityService
+                    p2pService.sendMessage(messageText)
                     let sentMessage = "Me: \(messageText)"
                     displayedMessages.append(ChatMessage(text: sentMessage))
-                    p2pService.sendMessage(messageText)
                     messageText = ""
                 }) {
                     Text("Send")
