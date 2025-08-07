@@ -7,9 +7,10 @@ class P2PConnectivityService: NSObject, ObservableObject {
     @Published var connectedPeer: MCPeerID?
     @Published var isHandshakeComplete = false
     @Published var sessionStartTime: Date?
+    @Published var currentPrompt: String?
 
     private let serviceType = "unseen-app"
-    private let myPeerID = MCPeerID(displayName: UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString)
+    let myPeerID = MCPeerID(displayName: UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString)
     private var serviceAdvertiser: MCNearbyServiceAdvertiser!
     private var serviceBrowser: MCNearbyServiceBrowser!
     
@@ -108,6 +109,21 @@ class P2PConnectivityService: NSObject, ObservableObject {
             }
         }
     }
+    
+    // Send a system message (like prompt sync) that doesn't count as user message
+    func sendSystemMessage(_ message: String) {
+        guard let peerID = session.connectedPeers.first,
+              let noiseService = noiseServices[peerID],
+              isHandshakeComplete else {
+            return
+        }
+        
+        let systemMessage = "[SYSTEM]\(message)"
+        if let encryptedData = noiseService.encrypt(systemMessage) {
+            send(data: encryptedData, to: peerID)
+            print("📤 Sent system message: \(message)")
+        }
+    }
 
     private func initiateHandshake(for peerID: MCPeerID) {
         let isInitiator = myPeerID.displayName < peerID.displayName
@@ -135,6 +151,22 @@ class P2PConnectivityService: NSObject, ObservableObject {
                 // Ignore keepalive messages
                 if decryptedText == keepaliveMessage {
                     print("📡 Keepalive received from \(peerID.displayName)")
+                    return
+                }
+                
+                // Handle system messages
+                if decryptedText.hasPrefix("[SYSTEM]") {
+                    let systemContent = decryptedText.replacingOccurrences(of: "[SYSTEM]", with: "")
+                    print("📥 Received system message: \(systemContent)")
+                    
+                    // Post notification for prompt sync
+                    if systemContent.hasPrefix("PROMPT:") {
+                        let prompt = systemContent.replacingOccurrences(of: "PROMPT:", with: "")
+                        print("📥 Setting shared prompt: \(prompt)")
+                        DispatchQueue.main.async {
+                            self.currentPrompt = prompt
+                        }
+                    }
                     return
                 }
                 

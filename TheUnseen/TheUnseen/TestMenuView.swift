@@ -77,6 +77,7 @@ struct TestMenuView: View {
                     TestStatusRow(component: "P2P Discovery", status: .implemented)
                     TestStatusRow(component: "Encryption", status: .implemented)
                     TestStatusRow(component: "Firebase Auth", status: .implemented)
+                    TestStatusRow(component: "Biometric Auth", status: .implemented)
                     TestStatusRow(component: "ANIMA System", status: .implemented)
                     TestStatusRow(component: "Cloud Functions", status: .notImplemented)
                     TestStatusRow(component: "Block/Report", status: .notImplemented)
