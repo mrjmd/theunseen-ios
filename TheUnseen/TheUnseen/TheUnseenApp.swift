@@ -33,6 +33,18 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
       // Show notification even when app is in foreground
       completionHandler([.banner, .sound])
   }
+  
+  // Handle notification tap
+  func userNotificationCenter(_ center: UNUserNotificationCenter,
+                              didReceive response: UNNotificationResponse,
+                              withCompletionHandler completionHandler: @escaping () -> Void) {
+      // Check if this is an Integration notification
+      if response.notification.request.identifier.starts(with: "integration-ready-") {
+          // Post notification to open Integration view
+          NotificationCenter.default.post(name: NSNotification.Name("OpenPendingIntegration"), object: nil)
+      }
+      completionHandler()
+  }
 }
 
 @main

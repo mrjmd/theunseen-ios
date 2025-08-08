@@ -107,7 +107,7 @@ struct MeetupFlowView: View {
             dismiss()
         }) {
             NavigationStack {
-                ConvergenceView()
+                ConvergenceView(sessionId: sessionId)
             }
         }
     }

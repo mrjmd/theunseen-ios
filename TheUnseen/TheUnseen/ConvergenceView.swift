@@ -13,7 +13,7 @@ struct ConvergenceView: View {
     @State private var sessionComplete = false
     @State private var waitingForArtifact = false
     @State private var showingIntegration = false
-    @State private var sessionId = UUID().uuidString
+    @State var sessionId: String = UUID().uuidString  // Passed from MeetupFlowView, updated when received
     @State private var shouldDismissConvergence = false
     @State private var integrationCooldownRemaining: Int = Int(DeveloperSettings.shared.integrationCooldown)
     @State private var cooldownTimer: Timer?
@@ -542,7 +542,7 @@ struct ArtifactCreationView: View {
 
 #Preview {
     NavigationStack {
-        ConvergenceView()
+        ConvergenceView(sessionId: "preview-session-123")
             .environmentObject(P2PConnectivityService())
     }
 }

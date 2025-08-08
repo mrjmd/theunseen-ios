@@ -198,6 +198,12 @@ struct PathLaunchView: View {
             loadAnimaBalance()
             checkPendingIntegration()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenPendingIntegration"))) { _ in
+            // Open pending Integration when notification is tapped
+            if hasPendingIntegration {
+                showIntegration = true
+            }
+        }
         .onReceive(p2pService.$connectedPeer) { peer in
             if peer != nil {
                 connectionStatus = "Container established.\nThe Mirror is ready."
