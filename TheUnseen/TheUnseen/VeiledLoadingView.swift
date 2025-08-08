@@ -11,9 +11,9 @@ struct VeiledLoadingView: View {
     @State private var scanlineOffset: CGFloat = -200
     @State private var noiseOpacity: Double = 0.1
     
-    // Set this to true once you've added your logo to Assets.xcassets
-    let useCustomLogo = false
-    let logoImageName = "Logo" // Replace with your actual asset name
+    // Using custom logo from Assets.xcassets
+    let useCustomLogo = true
+    let logoImageName = "LaunchLogo" // Using your LaunchLogo Image Set
     
     var body: some View {
         ZStack {
@@ -107,7 +107,7 @@ struct VeiledLoadingView: View {
         }
     }
     
-    // Logo with glitch effect (for when you add your custom logo)
+    // Logo with glitch effect
     var logoWithGlitchEffect: some View {
         ZStack {
             // Background ghost layer
@@ -115,20 +115,20 @@ struct VeiledLoadingView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 200, height: 200)
-                .foregroundColor(.white.opacity(0.05))
+                .opacity(0.05)
                 .scaleEffect(1.1)
                 .blur(radius: 5)
             
-            // Multiple glitch layers
-            ForEach(0..<5) { index in
+            // Multiple glitch layers for digital artifact effect
+            ForEach(0..<3) { index in
                 Image(logoImageName)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 200, height: 200)
-                    .foregroundColor(glitchColor(for: index))
+                    .colorMultiply(glitchColor(for: index))
                     .offset(x: glitchOffset * CGFloat(index % 2 == 0 ? 1 : -1),
                            y: glitchOffset2 * CGFloat(index % 3 == 0 ? 1 : -0.5))
-                    .opacity(0.3)
+                    .opacity(0.2)
                     .blendMode(.screen)
             }
             
@@ -137,7 +137,7 @@ struct VeiledLoadingView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 200, height: 200)
-                .foregroundColor(.white.opacity(symbolOpacity))
+                .opacity(symbolOpacity)
         }
     }
     
