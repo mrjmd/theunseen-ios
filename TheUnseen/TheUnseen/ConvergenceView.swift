@@ -446,7 +446,8 @@ struct ConvergenceView: View {
             "sessionId": sessionId,
             "artifact": sharedArtifact,
             "timestamp": Date().timeIntervalSince1970,  // Convert Date to TimeInterval for JSON
-            "partnerName": p2pService.connectedPeer?.displayName as Any
+            "partnerName": p2pService.connectedPeer?.displayName as Any,
+            "peerId": p2pService.connectedPeer?.displayName as Any  // Store peer ID for cooldown management
         ] as [String : Any]
         
         // Convert to JSON and save to UserDefaults

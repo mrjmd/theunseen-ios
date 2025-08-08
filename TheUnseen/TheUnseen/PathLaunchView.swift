@@ -14,12 +14,14 @@ struct PathLaunchView: View {
     @State private var pendingIntegrationData: PendingIntegration?
     @State private var showIntegration = false
     @State private var checkTimer: Timer?
+    @State private var showingIntegrationWarning = false
     
     struct PendingIntegration: Codable {
         let sessionId: String
         let artifact: String
         let timestamp: TimeInterval  // Store as TimeInterval, convert to Date when needed
         let partnerName: String?
+        let peerId: String?  // Peer ID for cooldown management
         
         var date: Date {
             return Date(timeIntervalSince1970: timestamp)
@@ -175,17 +177,42 @@ struct PathLaunchView: View {
             .sheet(isPresented: $showDeveloperMenu) {
                 DeveloperMenuView()
             }
+            .alert("Incomplete Integration", isPresented: $showingIntegrationWarning) {
+                Button("Cancel", role: .cancel) { }
+                Button("Continue Anyway", role: .destructive) {
+                    // Clear the pending Integration
+                    UserDefaults.standard.removeObject(forKey: "pendingIntegration")
+                    hasPendingIntegration = false
+                    pendingIntegrationData = nil
+                    
+                    // Start new path
+                    startSearching()
+                }
+            } message: {
+                if let data = pendingIntegrationData {
+                    let hoursRemaining = Int(24 - (Date().timeIntervalSince(data.date) / 3600))
+                    Text("You have an incomplete Integration that will expire in \(max(1, hoursRemaining)) hour\(hoursRemaining == 1 ? "" : "s").\n\nStarting a new path will replace it and no ANIMA will be rewarded to either player from the previous Convergence.")
+                } else {
+                    Text("You have an incomplete Integration.\n\nStarting a new path will replace it and no ANIMA will be rewarded to either player from the previous Convergence.")
+                }
+            }
             .fullScreenCover(isPresented: $showIntegration) {
                 if let data = pendingIntegrationData {
                     NavigationStack {
                         IntegrationView(
                             sessionId: data.sessionId,
                             sharedArtifact: data.artifact,
+                            peerId: data.peerId,
                             onComplete: {
                                 // Clear pending integration
                                 UserDefaults.standard.removeObject(forKey: "pendingIntegration")
                                 hasPendingIntegration = false
                                 pendingIntegrationData = nil
+                                // Clear re-match cooldown if we have the peer ID (dev mode only)
+                                if DeveloperSettings.shared.isDeveloperModeEnabled, let peerId = data.peerId {
+                                    UserDefaults.standard.removeObject(forKey: "lastSession_\(peerId)")
+                                    print("🔓 [DEV MODE] Cleared re-match cooldown for \(peerId)")
+                                }
                                 // Reload ANIMA balance
                                 loadAnimaBalance()
                             }
@@ -223,6 +250,9 @@ struct PathLaunchView: View {
             if peer != nil {
                 connectionStatus = "Container established.\nThe Mirror is ready."
                 
+                // Stop discovery once connected (save battery)
+                p2pService.stopDiscovery()
+                
                 // Transition to chat after a brief moment
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                     withAnimation {
@@ -234,6 +264,9 @@ struct PathLaunchView: View {
                 isSearching = false
                 connectionStatus = "Ready to begin"
                 showChat = false
+                
+                // Make sure discovery is stopped
+                p2pService.stopDiscovery()
             }
         }
         .onReceive(p2pService.$isHandshakeComplete) { complete in
@@ -245,14 +278,21 @@ struct PathLaunchView: View {
     }
     
     private func beginPath() {
+        // Check if there's a pending Integration before starting a new path
+        if hasPendingIntegration {
+            showingIntegrationWarning = true
+        } else {
+            startSearching()
+        }
+    }
+    
+    private func startSearching() {
         isSearching = true
         connectionStatus = "Seeking a fellow Initiate nearby..."
         
-        // In production mode, start discovery when user clicks the button
-        // In dev mode, discovery is already running
-        if !DeveloperSettings.shared.isDeveloperModeEnabled {
-            p2pService.startDiscovery()
-        }
+        // Always start discovery when user clicks the button
+        // This gives users control over when they want to connect
+        p2pService.startDiscovery()
     }
     
     private func loadAnimaBalance() {
@@ -293,11 +333,13 @@ struct PathLaunchView: View {
                     
                     if hoursSince < 24 {
                         let partnerName = json["partnerName"] as? String
+                        let peerId = json["peerId"] as? String
                         pendingIntegrationData = PendingIntegration(
                             sessionId: sessionId,
                             artifact: artifact,
                             timestamp: timestamp,
-                            partnerName: partnerName
+                            partnerName: partnerName,
+                            peerId: peerId
                         )
                         hasPendingIntegration = true
                         print("📱 ✅ Loaded pending Integration: \(sessionId), artifact: \(artifact)")

@@ -7,6 +7,7 @@ struct IntegrationView: View {
     
     let sessionId: String
     var sharedArtifact: String? = nil
+    var peerId: String? = nil  // Optional peer ID for cooldown management
     var onComplete: (() -> Void)? = nil
     
     // The three sliders
@@ -330,6 +331,10 @@ struct IntegrationView: View {
                         UNUserNotificationCenter.current().removePendingNotificationRequests(
                             withIdentifiers: ["integration-reminder-\(self.sessionId)"]
                         )
+                        
+                        // Note: Can't clear re-match cooldown here as we don't have peer ID
+                        // when opening from pending Integration (P2P disconnected)
+                        // TODO: Store peer ID with pending Integration to enable cooldown clearing
                         
                         self.showingCompletion = true
                     } else if retryIndex < retryDelays.count {

@@ -59,10 +59,8 @@ class P2PConnectivityService: NSObject, ObservableObject {
 
     override init() {
         super.init()
-        // Only auto-start in developer mode
-        if DeveloperSettings.shared.isDeveloperModeEnabled {
-            startDiscovery()
-        }
+        // Never auto-start discovery - user must click "Begin The Path"
+        // This ensures users have control over when they start seeking connections
     }
     
     deinit {
@@ -92,7 +90,7 @@ class P2PConnectivityService: NSObject, ObservableObject {
     }
     
     // Encapsulate stopping both advertiser and browser
-    private func stopDiscovery() {
+    func stopDiscovery() {
         guard isDiscoveryActive else { return }
         
         print("Stopping discovery...")
