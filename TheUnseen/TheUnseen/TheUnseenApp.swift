@@ -1,6 +1,7 @@
 import SwiftUI
 import FirebaseCore
 import FirebaseAuth
+import UserNotifications
 
 // By using an AppDelegate, we guarantee that Firebase is configured
 // before any other part of our app tries to use it.
@@ -9,6 +10,16 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
     print("Application is launching. Configuring Firebase...")
     FirebaseApp.configure()
+    
+    // Request notification permissions
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+        if granted {
+            print("Notification permissions granted")
+        } else if let error = error {
+            print("Error requesting notifications: \(error)")
+        }
+    }
+    
     return true
   }
 }

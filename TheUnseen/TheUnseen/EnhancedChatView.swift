@@ -8,44 +8,56 @@ struct EnhancedChatView: View {
     @State private var promptShown = false
     @State private var showingConvergenceAlert = false
     @State private var convergenceInitiated = false
+    @State private var hasRespondedToCurrentPrompt = false
+    @State private var peerHasRespondedToCurrentPrompt = false
+    @State private var showDeveloperMenu = false
     
     var body: some View {
         VStack(spacing: 0) {
-            // Meaningful interaction progress OR Convergence button
+            // Combined field status and act progression
             if p2pService.isHandshakeComplete {
-                if p2pService.isMeaningfulInteraction {
-                    // Show Convergence button after meaningful interaction
-                    ConvergenceButtonView(
-                        showingAlert: $showingConvergenceAlert,
-                        convergenceInitiated: $convergenceInitiated
+                VStack(spacing: 6) {
+                    // Compact status bar with acts and field
+                    CompactStatusBar(
+                        currentAct: promptsService.currentAct,
+                        isMeaningful: p2pService.isMeaningfulInteraction
                     )
-                    .padding(.vertical, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                } else {
-                    // Show progress tracker
-                    MeaningfulInteractionView()
-                        .padding(.vertical, 8)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                    
+                    // Convergence button on its own line when meaningful interaction achieved
+                    if p2pService.isMeaningfulInteraction {
+                        ConvergenceButtonView(
+                            showingAlert: $showingConvergenceAlert,
+                            convergenceInitiated: $convergenceInitiated
+                        )
+                    }
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
             
-            // Prompt display
-            if let promptText = promptsService.getCurrentPromptText() {
-                VStack(spacing: 10) {
-                    Text("Level 1 • The Path")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                        .tracking(1)
+            // Prompt display - condensed
+            if let prompt = promptsService.currentPrompt {
+                VStack(spacing: 6) {
+                    Text(prompt.voicePrefix)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.purple)
+                        .italic()
                     
-                    Text(promptText)
-                        .font(.system(size: 16, weight: .light))
+                    Text(promptsService.currentPhase == .digital ? prompt.digitalPrompt : prompt.convergencePrompt)
+                        .font(.system(size: 14, weight: .light))
                         .foregroundColor(.primary)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                        .transition(.opacity)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding()
-                .background(Color(UIColor.secondarySystemBackground))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(UIColor.secondarySystemBackground).opacity(0.8))
+                )
+                .padding(.horizontal, 12)
                 .animation(.easeIn, value: promptsService.currentPrompt?.id)
             }
             
@@ -70,9 +82,9 @@ struct EnhancedChatView: View {
                 }
             }
             
-            // Input area
+            // Input area with sacred language
             HStack(spacing: 12) {
-                TextField("Share your truth...", text: $messageText)
+                TextField("Speak what is true...", text: $messageText)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .onSubmit {
                         sendMessage()
@@ -91,23 +103,58 @@ struct EnhancedChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle("The Container")
         .preferredColorScheme(.light) // Force light mode for Level 1
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if DeveloperSettings.shared.isDeveloperModeEnabled {
+                    Button(action: {
+                        showDeveloperMenu = true
+                    }) {
+                        Image(systemName: "wrench.and.screwdriver.fill")
+                            .foregroundColor(.purple.opacity(0.6))
+                            .font(.caption)
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showDeveloperMenu) {
+            DeveloperMenuView()
+        }
         .onAppear {
             showFirstPrompt()
         }
+        .onReceive(p2pService.$isHandshakeComplete) { isComplete in
+            if isComplete && !promptShown {
+                // Try again if handshake completes after view appears
+                showFirstPrompt()
+            }
+        }
         .onReceive(promptsService.$currentPrompt) { prompt in
             // Update UI when prompt changes
-            if prompt != nil {
-                print("📱 UI updated with new prompt")
+            if let prompt = prompt {
+                // New prompt displayed
             }
+        }
+        .onReceive(promptsService.$currentAct) { act in
+            // Act change: \(act)
+            // Reset response flags when act changes
+            hasRespondedToCurrentPrompt = false
+            peerHasRespondedToCurrentPrompt = false
         }
         .onReceive(p2pService.$messages) { newMessages in
             // Update displayed messages from service
             if let lastMessage = newMessages.last {
-                if !displayedMessages.contains(where: { $0.id == lastMessage.id }) {
+                // Skip system messages (they start with [SYSTEM])
+                if !lastMessage.text.hasPrefix("[SYSTEM]") && !displayedMessages.contains(where: { $0.id == lastMessage.id }) {
                     let displayMessage = ChatMessage(text: "Initiate: \(lastMessage.text)")
                     displayedMessages.append(displayMessage)
                     
-                    // Don't automatically show new prompts - Level 1 has one prompt per session
+                    // Mark that peer has responded to this prompt (only once per act)
+                    if !peerHasRespondedToCurrentPrompt {
+                        peerHasRespondedToCurrentPrompt = true
+                        
+                        // Check if we should progress
+                        checkForActProgression()
+                    }
                 }
             }
         }
@@ -123,6 +170,39 @@ struct EnhancedChatView: View {
         // Send via P2P
         p2pService.sendMessage(messageText)
         messageText = ""
+        
+        // Mark that we've responded to this prompt (only once per act)
+        if !hasRespondedToCurrentPrompt {
+            hasRespondedToCurrentPrompt = true
+            
+            // Check if we should progress to next act
+            checkForActProgression()
+        }
+        
+        // After first message, verify journey sync
+        if p2pService.sentMessageCount == 1 {
+            verifyJourneySync()
+        }
+    }
+    
+    private func checkForActProgression() {
+        // Only the initiator controls act progression
+        let isInitiator = p2pService.myPeerID.displayName < (p2pService.connectedPeer?.displayName ?? "")
+        guard isInitiator else { return }
+        
+        print("🎭 Act \(promptsService.currentAct) - Me responded: \(hasRespondedToCurrentPrompt), Peer responded: \(peerHasRespondedToCurrentPrompt)")
+        
+        // Progress when both players have responded to the current prompt
+        if hasRespondedToCurrentPrompt && peerHasRespondedToCurrentPrompt && promptsService.currentAct < 3 {
+            print("🎭 Both players responded to Act \(promptsService.currentAct), progressing to next act")
+            
+            // Progress to next act
+            promptsService.progressToNextAct(using: p2pService)
+            
+            // Reset response flags for the new act
+            hasRespondedToCurrentPrompt = false
+            peerHasRespondedToCurrentPrompt = false
+        }
     }
     
     private func showFirstPrompt() {
@@ -132,19 +212,59 @@ struct EnhancedChatView: View {
         // Check if we're the initiator (select and send prompt)
         let isInitiator = p2pService.myPeerID.displayName < (p2pService.connectedPeer?.displayName ?? "")
         
-        // Wait for connection to stabilize
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        // Wait for connection to stabilize and handshake to complete
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            // Make sure we're still connected
+            guard self.p2pService.isHandshakeComplete else {
+                print("❌ Cannot send journey - handshake not complete")
+                self.promptShown = false  // Reset to try again
+                return
+            }
+            
             if isInitiator {
-                // Initiator selects and shares the prompt using the new service
-                self.promptsService.selectAndSharePrompt(for: 1, using: self.p2pService)
-                print("📤 Initiator selected and shared prompt")
+                // Initiator starts a new 3-act journey
+                self.promptsService.startNewJourney(for: 1, using: self.p2pService)
+                print("🎭 Initiator started new journey")
                 
-                // Retry sending after a delay to ensure delivery
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    if let prompt = self.promptsService.currentPrompt {
-                        self.p2pService.sendSystemMessage("PROMPT_ID:\(prompt.id)")
+                // Send multiple times to ensure delivery
+                for delay in [0.5, 2.0, 4.0] {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                        if let journey = self.promptsService.currentJourney,
+                           self.p2pService.isHandshakeComplete {
+                            self.p2pService.sendSystemMessage("JOURNEY_ID:\(journey.id)")
+                            // Sending journey ID
+                        }
                     }
                 }
+            } else {
+                // Responder waits for journey
+                print("👀 Responder waiting for journey ID...")
+                
+                // Request journey if not received after 5 seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+                    if self.promptsService.currentJourney == nil && self.p2pService.isHandshakeComplete {
+                        print("⚠️ No journey received, requesting from initiator...")
+                        self.p2pService.sendSystemMessage("REQUEST_JOURNEY")
+                    }
+                }
+            }
+        }
+    }
+    
+    private func verifyJourneySync() {
+        let isInitiator = p2pService.myPeerID.displayName < (p2pService.connectedPeer?.displayName ?? "")
+        
+        if isInitiator {
+            // Initiator resends journey ID after first message to ensure sync
+            if let journey = promptsService.currentJourney {
+                print("🔄 Verifying journey sync after first message")
+                p2pService.sendSystemMessage("JOURNEY_ID:\(journey.id)")
+            }
+        } else {
+            // Responder checks if they have a journey
+            if promptsService.currentJourney == nil {
+                print("⚠️ Still no journey after first message, requesting...")
+                p2pService.sendSystemMessage("REQUEST_JOURNEY")
             }
         }
     }

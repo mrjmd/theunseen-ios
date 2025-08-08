@@ -48,8 +48,7 @@ class ConvergenceHandshakeService: NSObject, ObservableObject {
         self.isInitiator = isInitiator
         self.sessionToken = String(sessionId.prefix(8))
         
-        print("🤝 Starting convergence handshake as \(isInitiator ? "initiator" : "responder")")
-        print("🔑 Session token: \(sessionToken)")
+        // Starting handshake with token: \(sessionToken)
         
         // Create unique peer ID for this handshake
         let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
@@ -72,7 +71,7 @@ class ConvergenceHandshakeService: NSObject, ObservableObject {
     }
     
     func stopVerification() {
-        print("🛑 Stopping convergence handshake")
+        // Stopping handshake
         
         timeoutTimer?.invalidate()
         timeoutTimer = nil
@@ -107,7 +106,7 @@ class ConvergenceHandshakeService: NSObject, ObservableObject {
         serviceAdvertiser?.delegate = self
         serviceAdvertiser?.startAdvertisingPeer()
         
-        print("📡 Advertising convergence service with token: \(sessionToken)")
+        // Advertising with token: \(sessionToken)
     }
     
     private func startBrowsing() {
@@ -120,7 +119,7 @@ class ConvergenceHandshakeService: NSObject, ObservableObject {
         serviceBrowser?.delegate = self
         serviceBrowser?.startBrowsingForPeers()
         
-        print("🔍 Browsing for convergence peers...")
+        // Browsing for peers...
     }
     
     private func startTimeout() {
@@ -128,7 +127,7 @@ class ConvergenceHandshakeService: NSObject, ObservableObject {
             guard let self = self else { return }
             
             if self.verificationState != .verified {
-                print("⏱️ Verification timeout")
+                // Verification timeout
                 self.verificationState = .failed("Could not verify proximity. Make sure you're standing close together.")
                 self.stopVerification()
             }
@@ -138,13 +137,13 @@ class ConvergenceHandshakeService: NSObject, ObservableObject {
     private func validatePeer(info: [String: String]?) -> Bool {
         // Check if the peer has the same session token
         guard let peerToken = info?["token"] else {
-            print("❌ Peer has no token")
+            // Peer has no token
             return false
         }
         
         // Tokens should match for same session
         let isValid = peerToken == sessionToken
-        print("🔐 Token validation: \(isValid) (peer: \(peerToken), ours: \(sessionToken))")
+        // Token validation: \(isValid)
         
         return isValid
     }
@@ -157,7 +156,7 @@ extension ConvergenceHandshakeService: MCSessionDelegate {
         DispatchQueue.main.async {
             switch state {
             case .connected:
-                print("✅ Convergence handshake successful with: \(peerID.displayName)")
+                print("✅ Handshake successful") // Keep for feedback
                 self.partnerFound = true
                 self.verificationState = .verified
                 self.verificationProgress = 1.0
@@ -171,12 +170,13 @@ extension ConvergenceHandshakeService: MCSessionDelegate {
                 }
                 
             case .connecting:
-                print("🔄 Connecting for convergence handshake...")
+                // Connecting...
                 self.verificationState = .connecting
                 self.verificationProgress = 0.6
                 
             case .notConnected:
-                print("❌ Convergence handshake disconnected")
+                // Disconnected
+                break
                 
             @unknown default:
                 break
@@ -205,21 +205,21 @@ extension ConvergenceHandshakeService: MCSessionDelegate {
 extension ConvergenceHandshakeService: MCNearbyServiceBrowserDelegate {
     
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String : String]?) {
-        print("🔍 Found convergence peer: \(peerID.displayName)")
+        // Found peer: \(peerID.displayName)
         
         // Validate this is our partner
         guard validatePeer(info: info) else {
-            print("⚠️ Peer validation failed, ignoring")
+            // Invalid peer
             return
         }
         
         // Check we're not connecting to ourselves
         guard peerID != handshakePeerID else {
-            print("⚠️ Found ourselves, ignoring")
+            // Found self, ignoring
             return
         }
         
-        print("✅ Valid partner found, inviting to session...")
+        // Inviting valid partner
         
         // Update state
         DispatchQueue.main.async {
@@ -232,11 +232,11 @@ extension ConvergenceHandshakeService: MCNearbyServiceBrowserDelegate {
     }
     
     func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
-        print("👋 Lost convergence peer: \(peerID.displayName)")
+        // Lost peer
     }
     
     func browser(_ browser: MCNearbyServiceBrowser, didNotStartBrowsingForPeers error: Error) {
-        print("❌ Failed to start browsing: \(error)")
+        // Browsing failed
         verificationState = .failed("Could not search for partner")
     }
 }
@@ -245,24 +245,24 @@ extension ConvergenceHandshakeService: MCNearbyServiceBrowserDelegate {
 extension ConvergenceHandshakeService: MCNearbyServiceAdvertiserDelegate {
     
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
-        print("📨 Received convergence invitation from: \(peerID.displayName)")
+        // Received invitation
         
         // Accept invitation if we're still searching
         if verificationState == .searching || verificationState == .connecting {
-            print("✅ Accepting convergence invitation")
+            // Accepting invitation
             invitationHandler(true, handshakeSession)
             
             DispatchQueue.main.async {
                 self.verificationProgress = 0.8
             }
         } else {
-            print("❌ Declining invitation - not in correct state")
+            // Declining - wrong state
             invitationHandler(false, nil)
         }
     }
     
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didNotStartAdvertisingPeer error: Error) {
-        print("❌ Failed to start advertising: \(error)")
+        // Advertising failed
         verificationState = .failed("Could not start proximity verification")
     }
 }
@@ -271,7 +271,7 @@ extension ConvergenceHandshakeService: MCNearbyServiceAdvertiserDelegate {
 extension ConvergenceHandshakeService {
     
     func startMockVerification(success: Bool = true) {
-        print("🧪 Starting mock convergence verification...")
+        // Starting mock verification
         verificationState = .searching
         verificationProgress = 0
         

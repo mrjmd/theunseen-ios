@@ -10,6 +10,14 @@ class P2PConnectivityService: NSObject, ObservableObject {
     @Published var currentPrompt: String?
     @Published var isMeaningfulInteraction = false
     @Published var connectionDuration: TimeInterval = 0
+    @Published var connectionQuality: ConnectionQuality = .unknown
+    
+    enum ConnectionQuality {
+        case unknown
+        case poor       // Frequent disconnects
+        case fair       // Some packet loss
+        case good       // Stable connection
+    }
 
     private let serviceType = "unseen-app"
     let myPeerID = MCPeerID(displayName: UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString)
@@ -27,8 +35,9 @@ class P2PConnectivityService: NSObject, ObservableObject {
     
     // Meaningful Interaction requirements (per README)
     private var hasAwardedAnimaForSession = false
-    // TODO: DEVELOPMENT MODE - Change back to 150 seconds (2.5 minutes) for production!
-    private let minimumSessionDuration: TimeInterval = 30  // 30 seconds for dev testing (should be 150)
+    private var minimumSessionDuration: TimeInterval {
+        DeveloperSettings.shared.minimumSessionDuration
+    }
     private let minimumMessagesPerUser = 3  // Each user must send at least 3 messages
     @Published var sentMessageCount = 0
     @Published var receivedMessageCount = 0
@@ -39,6 +48,8 @@ class P2PConnectivityService: NSObject, ObservableObject {
     private var keepaliveTimer: Timer?
     private let keepaliveInterval: TimeInterval = 5.0  // Send keepalive every 5 seconds
     private let keepaliveMessage = "[KEEPALIVE]"
+    private var keepaliveFailures = 0
+    private var successfulMessages = 0
 
     lazy var session: MCSession = {
         let session = MCSession(peer: myPeerID, securityIdentity: nil, encryptionPreference: .required)
@@ -115,6 +126,8 @@ class P2PConnectivityService: NSObject, ObservableObject {
             // Track our own sent messages (don't add to messages array - UI handles that)
             DispatchQueue.main.async {
                 self.sentMessageCount += 1
+                self.successfulMessages += 1
+                self.updateConnectionQuality()
                 self.checkMeaningfulInteraction()
             }
         }
@@ -131,7 +144,10 @@ class P2PConnectivityService: NSObject, ObservableObject {
         let systemMessage = "[SYSTEM]\(message)"
         if let encryptedData = noiseService.encrypt(systemMessage) {
             send(data: encryptedData, to: peerID)
-            print("📤 Sent system message: \(message)")
+            // Only log important system messages
+            if message.contains("SACRED_SPACE") || message.contains("CONVERGENCE") || message.contains("HANDSHAKE") || message.contains("ACT_CHANGE") || message.contains("MEETUP") {
+                print("📤 \(message)")
+            }
         }
     }
 
@@ -167,10 +183,50 @@ class P2PConnectivityService: NSObject, ObservableObject {
                 // Handle system messages
                 if decryptedText.hasPrefix("[SYSTEM]") {
                     let systemContent = decryptedText.replacingOccurrences(of: "[SYSTEM]", with: "")
-                    print("📥 Received system message: \(systemContent)")
+                    // Only log important system messages
+                    if systemContent.contains("SACRED_SPACE") || systemContent.contains("CONVERGENCE") || systemContent.contains("HANDSHAKE") || systemContent.contains("ACT_CHANGE") || systemContent.contains("MEETUP") {
+                        print("📥 \(systemContent)")
+                    }
                     
-                    // Handle prompt ID sync (new format)
-                    if systemContent.hasPrefix("PROMPT_ID:") {
+                    // Handle journey and prompt sync
+                    if systemContent.hasPrefix("JOURNEY_ID:") {
+                        let journeyId = systemContent.replacingOccurrences(of: "JOURNEY_ID:", with: "")
+                        // Journey ID received (logged elsewhere)
+                        DispatchQueue.main.async {
+                            PromptsService.shared.receiveJourneyId(journeyId, using: self)
+                            // Update our current prompt display
+                            if let prompt = PromptsService.shared.currentPrompt {
+                                self.currentPrompt = PromptsService.shared.formatPromptWithVoice(prompt)
+                            }
+                            // Send acknowledgment
+                            self.sendSystemMessage("JOURNEY_ACK")
+                        }
+                    }
+                    // Handle journey request from responder
+                    else if systemContent == "REQUEST_JOURNEY" {
+                        // Resending journey on request
+                        DispatchQueue.main.async {
+                            if let journey = PromptsService.shared.currentJourney {
+                                self.sendSystemMessage("JOURNEY_ID:\(journey.id)")
+                            }
+                        }
+                    }
+                    // Handle journey acknowledgment
+                    else if systemContent == "JOURNEY_ACK" {
+                        // Journey acknowledged
+                    }
+                    // Handle act changes
+                    else if systemContent.hasPrefix("ACT_CHANGE:") {
+                        let actString = systemContent.replacingOccurrences(of: "ACT_CHANGE:", with: "")
+                        if let act = Int(actString) {
+                            print("🎭 Received act change: \(act)")
+                            DispatchQueue.main.async {
+                                PromptsService.shared.receiveActChange(act, using: self)
+                            }
+                        }
+                    }
+                    // Legacy prompt ID sync
+                    else if systemContent.hasPrefix("PROMPT_ID:") {
                         let promptId = systemContent.replacingOccurrences(of: "PROMPT_ID:", with: "")
                         print("📥 Received prompt ID: \(promptId)")
                         DispatchQueue.main.async {
@@ -185,8 +241,8 @@ class P2PConnectivityService: NSObject, ObservableObject {
                             self.currentPrompt = prompt
                         }
                     }
-                    // Handle Convergence and Meetup messages - add them to messages array for UI to see
-                    else if systemContent.contains("CONVERGENCE") || systemContent.contains("MEETUP") || systemContent.contains("HANDSHAKE") || systemContent.contains("ARTIFACT_CREATED") || systemContent.contains("RESONANCE_SCORES") {
+                    // Handle Convergence, Meetup, and Sacred Space messages - add them to messages array for UI to see
+                    else if systemContent.contains("CONVERGENCE") || systemContent.contains("MEETUP") || systemContent.contains("HANDSHAKE") || systemContent.contains("SACRED_SPACE") || systemContent.contains("ARTIFACT_CREATED") || systemContent.contains("RESONANCE_SCORES") {
                         DispatchQueue.main.async {
                             // Add to messages array so UI components can detect it
                             self.messages.append(ChatMessage(text: "[SYSTEM]\(systemContent)"))
@@ -217,9 +273,8 @@ class P2PConnectivityService: NSObject, ObservableObject {
             if handshakeDidComplete {
                 DispatchQueue.main.async {
                     self.isHandshakeComplete = true
-                    self.sessionStartTime = Date()
-                    self.startSessionTimer()
-                    print("Handshake complete. Session started.")
+                    // Don't start timer yet - wait for journey to be established
+                    print("Handshake complete. Ready for journey.")
                     // Do NOT award ANIMA here - wait for meaningful interaction
                 }
             }
@@ -229,6 +284,17 @@ class P2PConnectivityService: NSObject, ObservableObject {
 
 extension P2PConnectivityService: MCNearbyServiceAdvertiserDelegate {
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
+        // Check if we recently had a session with this peer
+        if let lastSessionDate = UserDefaults.standard.object(forKey: "lastSession_\(peerID.displayName)") as? Date {
+            let secondsSinceLastSession = Date().timeIntervalSince(lastSessionDate)
+            let cooldownSeconds = DeveloperSettings.shared.rematchCooldown
+            if secondsSinceLastSession < cooldownSeconds {
+                print("Declining invitation from \(peerID.displayName) - cooldown active")
+                invitationHandler(false, nil)
+                return
+            }
+        }
+        
         // Only accept if we're not already connected
         if session.connectedPeers.isEmpty && !connectionAttempts.contains(peerID) {
             print("Accepting invitation from: \(peerID.displayName)")
@@ -243,6 +309,17 @@ extension P2PConnectivityService: MCNearbyServiceAdvertiserDelegate {
 
 extension P2PConnectivityService: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String : String]?) {
+        // Check if we recently had a session with this peer
+        if let lastSessionDate = UserDefaults.standard.object(forKey: "lastSession_\(peerID.displayName)") as? Date {
+            let secondsSinceLastSession = Date().timeIntervalSince(lastSessionDate)
+            let cooldownSeconds = DeveloperSettings.shared.rematchCooldown
+            if secondsSinceLastSession < cooldownSeconds {
+                let remaining = Int(cooldownSeconds - secondsSinceLastSession)
+                print("Skipping peer \(peerID.displayName) - cooldown active (\(remaining)s remaining)")
+                return
+            }
+        }
+        
         // Prevent duplicate invitations
         guard connectionAttempts.insert(peerID).inserted else {
             return // Already attempting connection with this peer
@@ -277,6 +354,9 @@ extension P2PConnectivityService: MCSessionDelegate {
                 self.connectedPeer = peerID
                 self.initiateHandshake(for: peerID)
                 self.startKeepalive()  // Start sending keepalive messages
+                self.keepaliveFailures = 0
+                self.successfulMessages = 0
+                self.connectionQuality = .unknown
                 
                 if let data = self.pendingData[peerID] {
                     print("Processing queued data for \(peerID.displayName)")
@@ -312,6 +392,7 @@ extension P2PConnectivityService: MCSessionDelegate {
                     self.messages.removeAll() // Clear messages on disconnect
                     self.stopKeepalive()  // Stop keepalive timer
                     self.stopSessionTimer()  // Stop session timer
+                    self.connectionQuality = .unknown
                     
                     // Schedule reconnection with delay to prevent flapping
                     self.scheduleReconnection()
@@ -353,7 +434,7 @@ extension P2PConnectivityService: MCSessionDelegate {
         let shouldLog = Int(connectionDuration) % 10 == 0 || 
                        (sentMessageCount + receivedMessageCount) != lastLoggedMessageCount
         
-        if shouldLog {
+        if shouldLog && Int(connectionDuration) % 30 == 0 {
             print("📊 Session: \(Int(connectionDuration))s, Sent: \(sentMessageCount), Received: \(receivedMessageCount)")
             lastLoggedMessageCount = sentMessageCount + receivedMessageCount
         }
@@ -391,15 +472,21 @@ extension P2PConnectivityService: MCSessionDelegate {
             if !hasEnoughReceivedMessages {
                 needs.append("\(minimumMessagesPerUser - receivedMessageCount) received")
             }
-            if !needs.isEmpty {
+            if !needs.isEmpty && Int(connectionDuration) % 30 == 0 {
                 print("⏳ Need: \(needs.joined(separator: ", "))")
             }
         }
     }
     
     // Start tracking session duration
-    private func startSessionTimer() {
-        stopSessionTimer() // Ensure no duplicate timers
+    func startSessionTimer() {
+        // Only start if not already running
+        guard sessionTimer == nil else { return }
+        
+        // Set start time if not already set
+        if sessionStartTime == nil {
+            sessionStartTime = Date()
+        }
         
         // Update connection duration every second
         sessionTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -414,7 +501,7 @@ extension P2PConnectivityService: MCSessionDelegate {
             }
         }
         
-        print("⏱️ Session timer started")
+        print("⏱️ Session timer started - meaningful interaction tracking begins")
     }
     
     // Stop tracking session duration
@@ -447,5 +534,28 @@ extension P2PConnectivityService: MCSessionDelegate {
     private func stopKeepalive() {
         keepaliveTimer?.invalidate()
         keepaliveTimer = nil
+    }
+    
+    private func updateConnectionQuality() {
+        // Update connection quality based on success rate
+        let totalAttempts = successfulMessages + keepaliveFailures
+        guard totalAttempts > 0 else { 
+            connectionQuality = .unknown
+            return 
+        }
+        
+        let successRate = Double(successfulMessages) / Double(totalAttempts)
+        
+        if successRate > 0.9 {
+            connectionQuality = .good
+        } else if successRate > 0.7 {
+            connectionQuality = .fair
+        } else {
+            connectionQuality = .poor
+        }
+        
+        if connectionQuality == .poor && keepaliveFailures > 3 {
+            print("⚠️ Poor connection quality detected - \(keepaliveFailures) keepalive failures")
+        }
     }
 }

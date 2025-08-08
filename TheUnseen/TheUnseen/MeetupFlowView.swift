@@ -11,6 +11,9 @@ struct MeetupFlowView: View {
     @State private var handshakeComplete = false
     @State private var showingConvergence = false
     @State private var sessionId = UUID().uuidString
+    @State private var waitingForPartnerToEnter = false
+    @State private var partnerReadyToEnter = false
+    @State private var lastProcessedMessageCount = 0
     
     enum MeetupPhase {
         case describing      // Initiator describes location/appearance
@@ -75,8 +78,10 @@ struct MeetupFlowView: View {
                 
             case .verified:
                 HandshakeSuccessView(
+                    waitingForPartner: $waitingForPartnerToEnter,
+                    partnerReady: $partnerReadyToEnter,
                     onContinue: {
-                        showingConvergence = true
+                        enterSacredSpace()
                     }
                 )
             }
@@ -86,7 +91,15 @@ struct MeetupFlowView: View {
         .navigationBarTitleDisplayMode(.inline)
         .preferredColorScheme(.light)
         .onReceive(p2pService.$messages) { messages in
-            handleSystemMessages(messages)
+            // Only process NEW messages we haven't seen before
+            let newMessageCount = messages.count - lastProcessedMessageCount
+            if newMessageCount > 0 {
+                let newMessages = messages.suffix(newMessageCount)
+                for message in newMessages {
+                    handleSystemMessage(message)
+                }
+                lastProcessedMessageCount = messages.count
+            }
         }
         .fullScreenCover(isPresented: $showingConvergence) {
             NavigationStack {
@@ -100,12 +113,42 @@ struct MeetupFlowView: View {
         p2pService.sendSystemMessage("MEETUP_DESC:\(description)")
     }
     
-    private func handleSystemMessages(_ messages: [ChatMessage]) {
-        guard let lastMessage = messages.last else { return }
+    private func handleSystemMessage(_ message: ChatMessage) {
+        print("📩 MeetupFlowView processing: \(message.text.prefix(50))...")
         
-        if lastMessage.text.contains("MEETUP_DESC:") {
+        // Check if this is a sacred space message FIRST
+        if message.text.contains("SACRED_SPACE_REQUEST") {
+            print("🚨 SACRED_SPACE_REQUEST detected!")
+            print("   Message: \(message.text)")
+            print("   Current state - waiting: \(waitingForPartnerToEnter), partnerReady: \(partnerReadyToEnter)")
+            
+            DispatchQueue.main.async {
+                self.partnerReadyToEnter = true
+                print("   ✅ Set partnerReadyToEnter = true")
+                
+                // If we're also waiting, both can proceed
+                if self.waitingForPartnerToEnter {
+                    print("   🎯 Both ready, starting sacred space")
+                    self.p2pService.sendSystemMessage("SACRED_SPACE_START")
+                    self.showingConvergence = true
+                } else {
+                    print("   ⏳ Partner is ready, waiting for us to confirm")
+                }
+            }
+            return
+        }
+        
+        if message.text.contains("SACRED_SPACE_START") {
+            print("🚨 SACRED_SPACE_START detected!")
+            DispatchQueue.main.async {
+                self.showingConvergence = true
+            }
+            return
+        }
+        
+        if message.text.contains("MEETUP_DESC:") {
             // Parse peer's description including session ID
-            let desc = lastMessage.text.replacingOccurrences(of: "[SYSTEM]MEETUP_DESC:", with: "")
+            let desc = message.text.replacingOccurrences(of: "[SYSTEM]MEETUP_DESC:", with: "")
             
             // Extract session ID
             if let sessionRange = desc.range(of: "SESSION:") {
@@ -126,10 +169,10 @@ struct MeetupFlowView: View {
             if !isInitiator {
                 meetupPhase = .findingPeer
             }
-        } else if lastMessage.text.contains("HANDSHAKE_INITIATE") {
+        } else if message.text.contains("HANDSHAKE_INITIATE") {
             // Peer is ready for handshake
             performDigitalHandshake()
-        } else if lastMessage.text.contains("HANDSHAKE_CONFIRM") {
+        } else if message.text.contains("HANDSHAKE_CONFIRM") {
             // Handshake confirmed
             completeHandshake()
         }
@@ -185,6 +228,24 @@ struct MeetupFlowView: View {
         
         // Haptic feedback
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+    }
+    
+    private func enterSacredSpace() {
+        print("🎭 Enter sacred space clicked. Partner ready: \(partnerReadyToEnter)")
+        
+        // Set our state first
+        waitingForPartnerToEnter = true
+        
+        if partnerReadyToEnter {
+            // Partner already signaled ready, both can enter
+            print("✅ Partner was ready, starting sacred space")
+            p2pService.sendSystemMessage("SACRED_SPACE_START")
+            showingConvergence = true
+        } else {
+            // Send our readiness signal
+            print("⏳ Sending ready signal, waiting for partner")
+            p2pService.sendSystemMessage("SACRED_SPACE_REQUEST")
+        }
     }
 }
 
@@ -404,10 +465,13 @@ struct ConfirmArrivalView: View {
 }
 
 struct HandshakeSuccessView: View {
+    @Binding var waitingForPartner: Bool
+    @Binding var partnerReady: Bool
     let onContinue: () -> Void
     @State private var showCheckmark = false
     
     var body: some View {
+        let _ = print("🎨 HandshakeSuccessView - waiting: \(waitingForPartner), partnerReady: \(partnerReady)")
         VStack(spacing: 30) {
             ZStack {
                 Circle()
@@ -431,24 +495,67 @@ struct HandshakeSuccessView: View {
                     .foregroundColor(.gray)
             }
             
-            Button(action: onContinue) {
-                HStack {
-                    Image(systemName: "arrow.right.circle")
-                    Text("Enter the Sacred Space")
+            if waitingForPartner {
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .purple))
+                    Text("Waiting for partner to be ready...")
+                        .font(.caption)
+                        .foregroundColor(.gray)
                 }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
                 .padding()
-                .background(
-                    LinearGradient(
-                        colors: [.purple, .indigo],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .cornerRadius(12)
+            } else if partnerReady {
+                VStack(spacing: 8) {
+                    Text("Your partner is ready!")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                    
+                    Button(action: onContinue) {
+                        HStack {
+                            Image(systemName: "checkmark.circle")
+                            Text("Yes, I'm Ready Too")
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(
+                            LinearGradient(
+                                colors: [.green, .mint],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .cornerRadius(12)
+                    }
+                }
+                .padding(.horizontal)
+            } else {
+                VStack(spacing: 8) {
+                    Text("When you're both together and ready, tap below")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                    
+                    Button(action: onContinue) {
+                        HStack {
+                            Image(systemName: "arrow.right.circle")
+                            Text("We're Both Ready")
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(
+                            LinearGradient(
+                                colors: [.purple, .indigo],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .cornerRadius(12)
+                    }
+                }
+                .padding(.horizontal)
             }
-            .padding(.horizontal)
         }
         .onAppear {
             showCheckmark = true

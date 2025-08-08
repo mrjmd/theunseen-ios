@@ -6,6 +6,7 @@ struct PathLaunchView: View {
     @State private var connectionStatus = "Ready to begin"
     @State private var showChat = false
     @State private var pulseAnimation = false
+    @State private var showDeveloperMenu = false
     
     var body: some View {
         NavigationStack {
@@ -79,16 +80,17 @@ struct PathLaunchView: View {
                 EnhancedChatView()
             }
             .toolbar {
-                #if DEBUG
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
-                        // Debug menu access
+                        showDeveloperMenu = true
                     }) {
-                        Image(systemName: "hammer.circle")
-                            .foregroundColor(.gray.opacity(0.5))
+                        Image(systemName: DeveloperSettings.shared.isDeveloperModeEnabled ? "wrench.and.screwdriver.fill" : "gearshape")
+                            .foregroundColor(DeveloperSettings.shared.isDeveloperModeEnabled ? .purple : .gray.opacity(0.5))
                     }
                 }
-                #endif
+            }
+            .sheet(isPresented: $showDeveloperMenu) {
+                DeveloperMenuView()
             }
         }
         .preferredColorScheme(.light) // Force light mode for Normie Mode

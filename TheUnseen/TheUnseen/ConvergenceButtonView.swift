@@ -12,48 +12,34 @@ struct ConvergenceButtonView: View {
     @State private var navigateToMeetup = false
     
     var body: some View {
-        VStack(spacing: 12) {
-            // Success indicator
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-                Text("Meaningful Interaction Achieved")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                Image(systemName: "sparkles")
-                    .foregroundColor(.yellow)
-            }
-            
-            // Convergence button or status
+        Group {
             if convergenceInitiated {
-                HStack {
+                HStack(spacing: 6) {
                     Image(systemName: "location.circle.fill")
+                        .font(.system(size: 12))
                         .foregroundColor(.purple)
                     Text("Convergence Proposed")
-                        .font(.caption)
-                        .fontWeight(.medium)
+                        .font(.system(size: 11, weight: .medium))
                     ProgressView()
-                        .scaleEffect(0.8)
+                        .scaleEffect(0.6)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
                 .background(Color.purple.opacity(0.1))
-                .cornerRadius(20)
+                .cornerRadius(15)
             } else {
                 Button(action: {
                     proposeConvergence()
                 }) {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 6) {
                         Image(systemName: "figure.2.circle")
-                            .font(.system(size: 18))
-                        Text("Propose the Convergence")
-                            .font(.system(size: 15, weight: .medium))
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 14))
+                            .font(.system(size: 12))
+                        Text("Propose Convergence")
+                            .font(.system(size: 11, weight: .medium))
                     }
                     .foregroundColor(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
                     .background(
                         LinearGradient(
                             colors: [Color.purple, Color.indigo],
@@ -61,15 +47,10 @@ struct ConvergenceButtonView: View {
                             endPoint: .trailing
                         )
                     )
-                    .cornerRadius(25)
-                    .shadow(color: Color.purple.opacity(0.3), radius: 8, x: 0, y: 4)
+                    .cornerRadius(15)
                 }
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(16)
         .alert("The Convergence", isPresented: $showingAlert) {
             if receivedConvergenceRequest {
                 // Received request from peer

@@ -1,10 +1,11 @@
 import SwiftUI
+import UserNotifications
 
 struct ConvergenceView: View {
     @EnvironmentObject var p2pService: P2PConnectivityService
+    @Environment(\.dismiss) var dismiss
     @StateObject private var promptsService = PromptsService.shared
-    // TODO: DEVELOPMENT MODE - Change back to 300 seconds (5 minutes) for production!
-    @State private var timeRemaining = 60 // 60 seconds for dev testing (should be 300)
+    @State private var timeRemaining: Int = Int(DeveloperSettings.shared.convergenceDuration)
     @State private var timer: Timer?
     @State private var showingArtifactCreation = false
     @State private var sharedArtifact = ""
@@ -12,6 +13,10 @@ struct ConvergenceView: View {
     @State private var waitingForArtifact = false
     @State private var showingIntegration = false
     @State private var sessionId = UUID().uuidString
+    @State private var shouldDismissConvergence = false
+    @State private var integrationCooldownRemaining: Int = Int(DeveloperSettings.shared.integrationCooldown)
+    @State private var cooldownTimer: Timer?
+    @State private var integrationAvailable = false
     
     var isInitiator: Bool {
         p2pService.myPeerID.displayName < (p2pService.connectedPeer?.displayName ?? "")
@@ -23,21 +28,28 @@ struct ConvergenceView: View {
         return String(format: "%d:%02d", minutes, seconds)
     }
     
+    var formattedCooldownTime: String {
+        let minutes = integrationCooldownRemaining / 60
+        let seconds = integrationCooldownRemaining % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+    
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            VStack(spacing: 8) {
-                Text("The Convergence")
-                    .font(.title2)
-                    .fontWeight(.light)
-                    .tracking(2)
-                
-                Text("In-Person Container")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                    .tracking(1)
-            }
-            .padding()
+        ScrollView {
+            VStack(spacing: 0) {
+                // Header
+                VStack(spacing: 8) {
+                    Text("The Convergence")
+                        .font(.title2)
+                        .fontWeight(.light)
+                        .tracking(2)
+                    
+                    Text("In-Person Container")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .tracking(1)
+                }
+                .padding()
             
             // Timer
             ZStack {
@@ -46,7 +58,7 @@ struct ConvergenceView: View {
                     .frame(width: 120, height: 120)
                 
                 Circle()
-                    .trim(from: 0, to: Double(timeRemaining) / 60.0)  // TODO: Change back to 300.0 for production!
+                    .trim(from: 0, to: Double(timeRemaining) / DeveloperSettings.shared.convergenceDuration)
                     .stroke(
                         LinearGradient(
                             colors: [.purple, .indigo],
@@ -69,15 +81,22 @@ struct ConvergenceView: View {
             }
             .padding(.vertical, 20)
             
-            // Convergence Prompt
-            if let convergencePrompt = promptsService.currentPrompt?.convergencePrompt {
+            // Convergence Prompt with mythology voice
+            if let prompt = promptsService.currentPrompt {
                 VStack(spacing: 16) {
                     Text("Your Sacred Task")
                         .font(.caption)
                         .foregroundColor(.purple)
                         .tracking(1)
                     
-                    Text(convergencePrompt)
+                    // Voice prefix
+                    Text(prompt.voicePrefix)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.purple)
+                        .italic()
+                    
+                    // Convergence prompt text
+                    Text(prompt.convergencePrompt)
                         .font(.system(size: 18, weight: .light))
                         .foregroundColor(.primary)
                         .multilineTextAlignment(.center)
@@ -173,31 +192,66 @@ struct ConvergenceView: View {
                             )
                             .padding(.horizontal)
                         
-                        Text("✨ ANIMA will be awarded after The Integration")
-                            .font(.caption2)
-                            .foregroundColor(.purple)
-                        
-                        Button(action: {
-                            showingIntegration = true
-                        }) {
-                            HStack {
-                                Image(systemName: "flame")
-                                Text("Begin The Integration")
-                                Image(systemName: "arrow.right")
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 14)
-                            .background(
-                                LinearGradient(
-                                    colors: [.purple, .indigo],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
+                        if integrationAvailable {
+                            Text("✨ Integration is now available")
+                                .font(.caption2)
+                                .foregroundColor(.green)
+                                .transition(.opacity.combined(with: .scale))
+                            
+                            Button(action: {
+                                showingIntegration = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "flame")
+                                    Text("Begin The Integration")
+                                    Image(systemName: "arrow.right")
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 14)
+                                .background(
+                                    LinearGradient(
+                                        colors: [.purple, .indigo],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
                                 )
-                            )
-                            .cornerRadius(25)
+                                .cornerRadius(25)
+                            }
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        } else {
+                            // Cooldown timer
+                            VStack(spacing: 8) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "timer")
+                                        .font(.caption)
+                                    Text("Integration unlocks in \(formattedCooldownTime)")
+                                        .font(.caption)
+                                }
+                                .foregroundColor(.gray)
+                                
+                                Text("Bid your partner farewell!")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray.opacity(0.8))
+                                    .italic()
+                            }
                         }
-                        .padding(.top)
+                        
+                        // Always show Return to Path button
+                        Button(action: {
+                            disconnectAndReturn()
+                        }) {
+                            Text("Return to the Path")
+                                .foregroundColor(.purple)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .stroke(Color.purple, lineWidth: 1)
+                                )
+                        }
+                        .padding(.top, 10)
+                        .padding(.bottom, 20)  // Extra padding for small screens
                     }
                     .padding()
                 } else if isInitiator && !waitingForArtifact {
@@ -248,6 +302,7 @@ struct ConvergenceView: View {
                             .foregroundColor(.gray)
                     }
                     .padding()
+                    }
                 }
             }
         }
@@ -267,11 +322,21 @@ struct ConvergenceView: View {
                 p2pService.sendSystemMessage("ARTIFACT_CREATED:\(sharedArtifact)|SESSION:\(sessionId)")
                 waitingForArtifact = true
                 sessionComplete = true
+                startIntegrationCooldown()
             })
         }
-        .fullScreenCover(isPresented: $showingIntegration) {
+        .fullScreenCover(isPresented: $showingIntegration, onDismiss: {
+            // When Integration is dismissed, also dismiss Convergence
+            if shouldDismissConvergence {
+                dismiss()
+            }
+        }) {
             IntegrationView(sessionId: sessionId)
                 .environmentObject(p2pService)
+                .onDisappear {
+                    // Mark that we should dismiss the entire Convergence flow
+                    shouldDismissConvergence = true
+                }
         }
         .onReceive(p2pService.$messages) { messages in
             // Listen for artifact creation from peer
@@ -291,12 +356,14 @@ struct ConvergenceView: View {
                                 self.sessionId = sessionPart
                             }
                             self.sessionComplete = true
+                            self.startIntegrationCooldown()
                         }
                     } else {
                         // Fallback for old format
                         DispatchQueue.main.async {
                             self.sharedArtifact = fullMessage
                             self.sessionComplete = true
+                            self.startIntegrationCooldown()
                         }
                     }
                 }
@@ -314,6 +381,55 @@ struct ConvergenceView: View {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             }
         }
+    }
+    
+    private func startIntegrationCooldown() {
+        cooldownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            if integrationCooldownRemaining > 0 {
+                integrationCooldownRemaining -= 1
+            } else {
+                cooldownTimer?.invalidate()
+                withAnimation(.spring()) {
+                    integrationAvailable = true
+                }
+                // Send local notification
+                sendIntegrationReadyNotification()
+                // Play haptic feedback
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            }
+        }
+    }
+    
+    private func sendIntegrationReadyNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "The Integration Awaits"
+        content.body = "Your reflection space is ready. Complete The Integration to receive your ANIMA."
+        content.sound = .default
+        
+        let request = UNNotificationRequest(
+            identifier: "integration-ready-\(sessionId)",
+            content: content,
+            trigger: nil  // Deliver immediately
+        )
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Failed to send notification: \(error)")
+            }
+        }
+    }
+    
+    private func disconnectAndReturn() {
+        // Store the peer ID to block re-matching for 1 hour
+        if let peerId = p2pService.connectedPeer?.displayName {
+            UserDefaults.standard.set(Date(), forKey: "lastSession_\(peerId)")
+        }
+        
+        // Disconnect from peer
+        p2pService.session.disconnect()
+        
+        // Dismiss the entire flow
+        dismiss()
     }
 }
 

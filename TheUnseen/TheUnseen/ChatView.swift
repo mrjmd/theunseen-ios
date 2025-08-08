@@ -44,8 +44,8 @@ struct ChatView: View {
         .onReceive(p2pService.$messages) { newMessages in
             // When the service gets a new message, add it to our display list.
             if let lastMessage = newMessages.last {
-                // Avoid adding duplicates.
-                if !self.displayedMessages.contains(where: { $0.id == lastMessage.id }) {
+                // Skip system messages and avoid adding duplicates
+                if !lastMessage.text.hasPrefix("[SYSTEM]") && !self.displayedMessages.contains(where: { $0.id == lastMessage.id }) {
                      self.displayedMessages.append(ChatMessage(text: "Peer: \(lastMessage.text)"))
                 }
             }

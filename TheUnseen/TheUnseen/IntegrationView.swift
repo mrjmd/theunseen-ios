@@ -21,6 +21,7 @@ struct IntegrationView: View {
     @State private var finalANIMA = 0
     @State private var peerSubmitted = false
     @State private var checkingMultiplier = false
+    @State private var waitingForPeer = false
     
     let reflectionPrompts = [
         "What did that interaction reveal in YOU?",
@@ -146,20 +147,52 @@ struct IntegrationView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, 30)
                         
-                    } else {
-                        // Completion State
+                    } else if showingCompletion {
+                        // Completion State - only show after both submit
                         CompletionView(
                             finalANIMA: finalANIMA,
-                            peerSubmitted: peerSubmitted,
+                            peerSubmitted: true,  // Both have submitted by this point
                             onComplete: {
                                 dismiss()
                             }
                         )
+                    } else {
+                        // Waiting state after submission
+                        VStack(spacing: 30) {
+                            Spacer()
+                            
+                            Image(systemName: "hourglass")
+                                .font(.system(size: 50))
+                                .foregroundColor(.purple)
+                                .symbolEffect(.pulse)
+                            
+                            Text("Offering Sealed")
+                                .font(.title2)
+                                .fontWeight(.light)
+                            
+                            if peerSubmitted {
+                                VStack(spacing: 12) {
+                                    ProgressView()
+                                    Text("Calculating resonance multiplier...")
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                }
+                            } else {
+                                Text("Waiting for your partner to complete their integration...")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal)
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding()
                     }
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-            .preferredColorScheme(.dark) // Integration uses dark mode for deeper feeling
+            .preferredColorScheme(.light) // Keep Level 1 in light mode
         }
         .onReceive(p2pService.$messages) { messages in
             // Listen for peer's resonance scores
@@ -180,10 +213,6 @@ struct IntegrationView: View {
     }
     
     private func submitIntegration() {
-        // Calculate ANIMA
-        let baseANIMA = 50
-        let courageBonus = Int(courageScore)
-        
         // Send scores to peer for multiplier calculation
         let scoreData = "RESONANCE_SCORES:presence=\(Int(presenceScore)),courage=\(Int(courageScore)),mirror=\(Int(mirrorScore))"
         p2pService.sendSystemMessage(scoreData)
@@ -201,9 +230,7 @@ struct IntegrationView: View {
             mirrorScore: Int(mirrorScore)
         )
         
-        // Calculate preliminary ANIMA (final will be calculated when both submit)
-        finalANIMA = baseANIMA + courageBonus
-        
+        // Don't calculate ANIMA yet - wait for both players
         withAnimation(.easeInOut) {
             hasSubmitted = true
         }
@@ -222,14 +249,23 @@ struct IntegrationView: View {
         // After both users submit, calculate final multiplier
         let firestoreService = FirestoreService()
         
+        // Calculate base ANIMA while waiting
+        let baseANIMA = 50
+        let courageBonus = Int(courageScore)
+        
         // Wait a moment for Firestore to sync
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             firestoreService.calculateResonanceMultiplier(sessionId: sessionId) { calculatedANIMA in
-                if calculatedANIMA > 0 {
-                    DispatchQueue.main.async {
+                DispatchQueue.main.async {
+                    if calculatedANIMA > 0 {
                         self.finalANIMA = calculatedANIMA
                         print("✨ Final ANIMA calculated with multiplier: \(calculatedANIMA)")
+                    } else {
+                        // Fallback if calculation fails
+                        self.finalANIMA = baseANIMA + courageBonus
                     }
+                    // Now show the completion view with ANIMA
+                    self.showingCompletion = true
                 }
             }
         }
@@ -266,7 +302,7 @@ struct SliderSection: View {
                 .font(.caption)
                 .foregroundColor(.gray)
             
-            // Custom styled slider
+            // Custom styled slider with better touch target
             ZStack(alignment: .leading) {
                 // Track
                 Capsule()
@@ -274,22 +310,28 @@ struct SliderSection: View {
                     .frame(height: 8)
                 
                 // Fill
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [color.opacity(0.6), color],
-                            startPoint: .leading,
-                            endPoint: .trailing
+                GeometryReader { geometry in
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [color.opacity(0.6), color],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
                         )
-                    )
-                    .frame(width: CGFloat(value) / 100.0 * (UIScreen.main.bounds.width - 40), height: 8)
-                    .animation(.interactiveSpring(), value: value)
+                        .frame(width: CGFloat(value) / 100.0 * geometry.size.width, height: 8)
+                        .animation(.interactiveSpring(), value: value)
+                }
+                .frame(height: 8)
             }
+            .frame(height: 8)
             .overlay(
-                // Invisible slider for interaction
-                Slider(value: $value, in: 0...100)
-                    .opacity(0.01)
+                // Better touch target for slider
+                Slider(value: $value, in: 0...100, step: 1)
+                    .tint(.clear)
+                    .opacity(0.05)
             )
+            .padding(.vertical, 8)  // More touch area
         }
     }
 }
