@@ -149,7 +149,7 @@ struct ConvergenceView: View {
                             .font(.caption)
                             .foregroundColor(.gray)
                         
-                        Text(""\(sharedArtifact)"")
+                        Text("\"\(sharedArtifact)\"")
                             .font(.body)
                             .italic()
                             .multilineTextAlignment(.center)
