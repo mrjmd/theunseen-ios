@@ -4,6 +4,7 @@ import UserNotifications
 struct ConvergenceView: View {
     @EnvironmentObject var p2pService: P2PConnectivityService
     @Environment(\.dismiss) var dismiss
+    @Environment(\.presentationMode) var presentationMode
     @StateObject private var promptsService = PromptsService.shared
     @State private var timeRemaining: Int = Int(DeveloperSettings.shared.convergenceDuration)
     @State private var timer: Timer?
@@ -308,6 +309,14 @@ struct ConvergenceView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .preferredColorScheme(.light) // Keep Level 1 in light mode
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Back to Path") {
+                    // Disconnect and return to main view
+                    disconnectAndReturn()
+                }
+            }
+        }
         .onAppear {
             startTimer()
             promptsService.transitionToConvergence()
@@ -384,14 +393,23 @@ struct ConvergenceView: View {
     }
     
     private func startIntegrationCooldown() {
+        print("🔥 Starting Integration cooldown: \(integrationCooldownRemaining)s")
         cooldownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             if integrationCooldownRemaining > 0 {
                 integrationCooldownRemaining -= 1
+                if integrationCooldownRemaining % 10 == 0 {
+                    print("🔥 Integration cooldown: \(integrationCooldownRemaining)s remaining")
+                }
             } else {
                 cooldownTimer?.invalidate()
+                print("🔥 Integration is now available!")
                 withAnimation(.spring()) {
                     integrationAvailable = true
                 }
+                
+                // Save pending integration for later access
+                savePendingIntegration()
+                
                 // Send local notification
                 sendIntegrationReadyNotification()
                 // Play haptic feedback
@@ -401,6 +419,7 @@ struct ConvergenceView: View {
     }
     
     private func sendIntegrationReadyNotification() {
+        print("📱 Sending Integration ready notification")
         let content = UNMutableNotificationContent()
         content.title = "The Integration Awaits"
         content.body = "Your reflection space is ready. Complete The Integration to receive your ANIMA."
@@ -414,8 +433,29 @@ struct ConvergenceView: View {
         
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
-                print("Failed to send notification: \(error)")
+                print("❌ Failed to send notification: \(error)")
+            } else {
+                print("✅ Integration notification sent successfully")
             }
+        }
+    }
+    
+    private func savePendingIntegration() {
+        // Create pending integration data with timestamp as TimeInterval
+        let pendingIntegration = [
+            "sessionId": sessionId,
+            "artifact": sharedArtifact,
+            "timestamp": Date().timeIntervalSince1970,  // Convert Date to TimeInterval for JSON
+            "partnerName": p2pService.connectedPeer?.displayName as Any
+        ] as [String : Any]
+        
+        // Convert to JSON and save to UserDefaults
+        if let jsonData = try? JSONSerialization.data(withJSONObject: pendingIntegration) {
+            UserDefaults.standard.set(jsonData, forKey: "pendingIntegration")
+            print("💾 Saved pending Integration for session: \(sessionId)")
+            print("💾 Artifact: \(sharedArtifact)")
+        } else {
+            print("❌ Failed to save pending Integration - JSON serialization failed")
         }
     }
     

@@ -59,7 +59,10 @@ class P2PConnectivityService: NSObject, ObservableObject {
 
     override init() {
         super.init()
-        startDiscovery()
+        // Only auto-start in developer mode
+        if DeveloperSettings.shared.isDeveloperModeEnabled {
+            startDiscovery()
+        }
     }
     
     deinit {
@@ -70,7 +73,7 @@ class P2PConnectivityService: NSObject, ObservableObject {
     }
     
     // Encapsulate starting both advertiser and browser
-    private func startDiscovery() {
+    func startDiscovery() {
         guard !isDiscoveryActive else { 
             print("Discovery already active, skipping...")
             return 

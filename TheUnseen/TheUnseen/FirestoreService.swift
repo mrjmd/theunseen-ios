@@ -49,6 +49,9 @@ class FirestoreService: ObservableObject {
                 print("Error updating ANIMA points: \(err)")
             } else {
                 print(" awarded \(connectionAnima) ANIMA for connection.")
+                // Also update UserDefaults for immediate UI update
+                let currentBalance = UserDefaults.standard.integer(forKey: "animaBalance")
+                UserDefaults.standard.set(currentBalance + connectionAnima, forKey: "animaBalance")
             }
         }
     }
@@ -98,26 +101,33 @@ class FirestoreService: ObservableObject {
                 return
             }
             
-            // Extract mirror scores from both users
+            // Extract scores from both users
             var mirrorScores: [Int] = []
-            var userCourageScore = 0
+            var courageScores: [Int] = []
+            var presenceScores: [Int] = []
             
             for doc in documents {
                 let data = doc.data()
                 if let mirror = data["mirrorScore"] as? Int {
                     mirrorScores.append(mirror)
                 }
-                if doc.documentID == userId, let courage = data["courageScore"] as? Int {
-                    userCourageScore = courage
+                if let courage = data["courageScore"] as? Int {
+                    courageScores.append(courage)
+                }
+                if let presence = data["presenceScore"] as? Int {
+                    presenceScores.append(presence)
                 }
             }
             
-            guard mirrorScores.count == 2 else {
+            guard mirrorScores.count == 2, courageScores.count == 2 else {
                 completion(0)
                 return
             }
             
-            // Calculate multiplier based on lower mirror score
+            // Calculate average courage score for shared bonus
+            let averageCourageScore = (courageScores[0] + courageScores[1]) / 2
+            
+            // Calculate multiplier based on lower mirror score (shared resonance)
             let sharedMirrorScore = min(mirrorScores[0], mirrorScores[1])
             let multiplier: Double
             
@@ -134,9 +144,9 @@ class FirestoreService: ObservableObject {
                 multiplier = 1.0
             }
             
-            // Calculate final ANIMA
+            // Calculate final ANIMA (same for both users)
             let baseANIMA = 50
-            let courageBonus = userCourageScore
+            let courageBonus = averageCourageScore  // Use average courage score
             let totalBeforeMultiplier = baseANIMA + courageBonus
             let finalANIMA = Int(Double(totalBeforeMultiplier) * multiplier)
             

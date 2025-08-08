@@ -5,11 +5,14 @@ import UserNotifications
 
 // By using an AppDelegate, we guarantee that Firebase is configured
 // before any other part of our app tries to use it.
-class AppDelegate: NSObject, UIApplicationDelegate {
+class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
   func application(_ application: UIApplication,
                    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
     print("Application is launching. Configuring Firebase...")
     FirebaseApp.configure()
+    
+    // Set notification delegate to handle foreground notifications
+    UNUserNotificationCenter.current().delegate = self
     
     // Request notification permissions
     UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
@@ -21,6 +24,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
     
     return true
+  }
+  
+  // Handle notifications when app is in foreground
+  func userNotificationCenter(_ center: UNUserNotificationCenter,
+                              willPresent notification: UNNotification,
+                              withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+      // Show notification even when app is in foreground
+      completionHandler([.banner, .sound])
   }
 }
 

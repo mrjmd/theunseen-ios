@@ -5,6 +5,8 @@ struct IntegrationView: View {
     @Environment(\.dismiss) var dismiss
     
     let sessionId: String
+    var sharedArtifact: String? = nil
+    var onComplete: (() -> Void)? = nil
     
     // The three sliders
     @State private var presenceScore: Double = 50
@@ -51,6 +53,40 @@ struct IntegrationView: View {
                     }
                     .padding(.top, 20)
                     .padding(.bottom, 30)
+                    
+                    // Show shared artifact if available
+                    if let artifact = sharedArtifact, !artifact.isEmpty {
+                        VStack(spacing: 8) {
+                            Text("Your Shared Artifact")
+                                .font(.caption)
+                                .foregroundColor(.purple)
+                                .tracking(1)
+                            
+                            Text("\"\(artifact)\"")
+                                .font(.system(size: 15, weight: .light))
+                                .foregroundColor(.primary)
+                                .italic()
+                                .multilineTextAlignment(.center)
+                                .padding()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color(UIColor.secondarySystemBackground))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(
+                                                    LinearGradient(
+                                                        colors: [.purple.opacity(0.3), .indigo.opacity(0.3)],
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    ),
+                                                    lineWidth: 1
+                                                )
+                                        )
+                                )
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom, 20)
+                    }
                     
                     if !hasSubmitted {
                         // Part 1: The Private Journal
@@ -153,6 +189,7 @@ struct IntegrationView: View {
                             finalANIMA: finalANIMA,
                             peerSubmitted: true,  // Both have submitted by this point
                             onComplete: {
+                                onComplete?()
                                 dismiss()
                             }
                         )
@@ -422,6 +459,11 @@ struct CompletionView: View {
                     showingANIMA = true
                 }
             }
+            
+            // Save ANIMA to UserDefaults
+            let currentBalance = UserDefaults.standard.integer(forKey: "animaBalance")
+            UserDefaults.standard.set(currentBalance + finalANIMA, forKey: "animaBalance")
+            print("💰 ANIMA balance updated: \(currentBalance) + \(finalANIMA) = \(currentBalance + finalANIMA)")
         }
     }
 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MeetupFlowView: View {
     @EnvironmentObject var p2pService: P2PConnectivityService
+    @Environment(\.dismiss) var dismiss
     @StateObject private var handshakeService = ConvergenceHandshakeService()
     @State private var meetupPhase: MeetupPhase = .describing
     @State private var locationDescription = ""
@@ -101,7 +102,10 @@ struct MeetupFlowView: View {
                 lastProcessedMessageCount = messages.count
             }
         }
-        .fullScreenCover(isPresented: $showingConvergence) {
+        .fullScreenCover(isPresented: $showingConvergence, onDismiss: {
+            // When Convergence is dismissed, also dismiss MeetupFlow
+            dismiss()
+        }) {
             NavigationStack {
                 ConvergenceView()
             }
@@ -114,32 +118,21 @@ struct MeetupFlowView: View {
     }
     
     private func handleSystemMessage(_ message: ChatMessage) {
-        print("📩 MeetupFlowView processing: \(message.text.prefix(50))...")
-        
         // Check if this is a sacred space message FIRST
         if message.text.contains("SACRED_SPACE_REQUEST") {
-            print("🚨 SACRED_SPACE_REQUEST detected!")
-            print("   Message: \(message.text)")
-            print("   Current state - waiting: \(waitingForPartnerToEnter), partnerReady: \(partnerReadyToEnter)")
-            
             DispatchQueue.main.async {
                 self.partnerReadyToEnter = true
-                print("   ✅ Set partnerReadyToEnter = true")
                 
                 // If we're also waiting, both can proceed
                 if self.waitingForPartnerToEnter {
-                    print("   🎯 Both ready, starting sacred space")
                     self.p2pService.sendSystemMessage("SACRED_SPACE_START")
                     self.showingConvergence = true
-                } else {
-                    print("   ⏳ Partner is ready, waiting for us to confirm")
                 }
             }
             return
         }
         
         if message.text.contains("SACRED_SPACE_START") {
-            print("🚨 SACRED_SPACE_START detected!")
             DispatchQueue.main.async {
                 self.showingConvergence = true
             }
@@ -231,19 +224,15 @@ struct MeetupFlowView: View {
     }
     
     private func enterSacredSpace() {
-        print("🎭 Enter sacred space clicked. Partner ready: \(partnerReadyToEnter)")
-        
         // Set our state first
         waitingForPartnerToEnter = true
         
         if partnerReadyToEnter {
             // Partner already signaled ready, both can enter
-            print("✅ Partner was ready, starting sacred space")
             p2pService.sendSystemMessage("SACRED_SPACE_START")
             showingConvergence = true
         } else {
             // Send our readiness signal
-            print("⏳ Sending ready signal, waiting for partner")
             p2pService.sendSystemMessage("SACRED_SPACE_REQUEST")
         }
     }
@@ -471,7 +460,6 @@ struct HandshakeSuccessView: View {
     @State private var showCheckmark = false
     
     var body: some View {
-        let _ = print("🎨 HandshakeSuccessView - waiting: \(waitingForPartner), partnerReady: \(partnerReady)")
         VStack(spacing: 30) {
             ZStack {
                 Circle()
