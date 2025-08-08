@@ -290,21 +290,37 @@ struct IntegrationView: View {
         let baseANIMA = 50
         let courageBonus = Int(courageScore)
         
-        // Wait a moment for Firestore to sync
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        // Retry logic for waiting for both reflections
+        var retryCount = 0
+        let maxRetries = 5
+        
+        func attemptCalculation() {
             firestoreService.calculateResonanceMultiplier(sessionId: sessionId) { calculatedANIMA in
                 DispatchQueue.main.async {
                     if calculatedANIMA > 0 {
                         self.finalANIMA = calculatedANIMA
                         print("✨ Final ANIMA calculated with multiplier: \(calculatedANIMA)")
+                        self.showingCompletion = true
+                    } else if retryCount < maxRetries {
+                        // Retry after a delay
+                        retryCount += 1
+                        print("⏳ Waiting for partner's reflection... (attempt \(retryCount)/\(maxRetries))")
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            attemptCalculation()
+                        }
                     } else {
-                        // Fallback if calculation fails
+                        // Final fallback after all retries
+                        print("⚠️ Using fallback ANIMA calculation")
                         self.finalANIMA = baseANIMA + courageBonus
+                        self.showingCompletion = true
                     }
-                    // Now show the completion view with ANIMA
-                    self.showingCompletion = true
                 }
             }
+        }
+        
+        // Start first attempt after initial delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            attemptCalculation()
         }
     }
 }

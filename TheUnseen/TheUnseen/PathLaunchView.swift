@@ -13,6 +13,7 @@ struct PathLaunchView: View {
     @State private var hasPendingIntegration = false
     @State private var pendingIntegrationData: PendingIntegration?
     @State private var showIntegration = false
+    @State private var checkTimer: Timer?
     
     struct PendingIntegration: Codable {
         let sessionId: String
@@ -197,12 +198,26 @@ struct PathLaunchView: View {
         .onAppear {
             loadAnimaBalance()
             checkPendingIntegration()
+            
+            // Start periodic check for pending Integration (less frequent)
+            checkTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
+                checkPendingIntegration()
+            }
+        }
+        .onDisappear {
+            checkTimer?.invalidate()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenPendingIntegration"))) { _ in
             // Open pending Integration when notification is tapped
+            checkPendingIntegration()  // Reload first
             if hasPendingIntegration {
                 showIntegration = true
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            // Reload when app becomes active (e.g., returning from background)
+            checkPendingIntegration()
+            loadAnimaBalance()
         }
         .onReceive(p2pService.$connectedPeer) { peer in
             if peer != nil {
@@ -262,33 +277,43 @@ struct PathLaunchView: View {
     
     private func checkPendingIntegration() {
         // Check if there's a pending integration stored
-        if let data = UserDefaults.standard.data(forKey: "pendingIntegration"),
-           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let sessionId = json["sessionId"] as? String,
-           let artifact = json["artifact"] as? String,
-           let timestamp = json["timestamp"] as? TimeInterval {
+        if let data = UserDefaults.standard.data(forKey: "pendingIntegration") {
+            print("📱 Found pending Integration data, attempting to decode...")
             
-            // Check if it's not too old (e.g., within 24 hours)
-            let date = Date(timeIntervalSince1970: timestamp)
-            let hoursSince = Date().timeIntervalSince(date) / 3600
-            
-            if hoursSince < 24 {
-                let partnerName = json["partnerName"] as? String
-                pendingIntegrationData = PendingIntegration(
-                    sessionId: sessionId,
-                    artifact: artifact,
-                    timestamp: timestamp,
-                    partnerName: partnerName
-                )
-                hasPendingIntegration = true
-                print("📱 Found pending Integration: \(sessionId)")
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                print("📱 JSON decoded: \(json)")
+                
+                if let sessionId = json["sessionId"] as? String,
+                   let artifact = json["artifact"] as? String,
+                   let timestamp = json["timestamp"] as? TimeInterval {
+                    
+                    // Check if it's not too old (e.g., within 24 hours)
+                    let date = Date(timeIntervalSince1970: timestamp)
+                    let hoursSince = Date().timeIntervalSince(date) / 3600
+                    
+                    if hoursSince < 24 {
+                        let partnerName = json["partnerName"] as? String
+                        pendingIntegrationData = PendingIntegration(
+                            sessionId: sessionId,
+                            artifact: artifact,
+                            timestamp: timestamp,
+                            partnerName: partnerName
+                        )
+                        hasPendingIntegration = true
+                        print("📱 ✅ Loaded pending Integration: \(sessionId), artifact: \(artifact)")
+                    } else {
+                        // Clear old pending integration
+                        UserDefaults.standard.removeObject(forKey: "pendingIntegration")
+                        print("🗑️ Cleared old pending Integration (>24h)")
+                    }
+                } else {
+                    print("📱 ❌ Failed to extract required fields from JSON")
+                }
             } else {
-                // Clear old pending integration
-                UserDefaults.standard.removeObject(forKey: "pendingIntegration")
-                print("🗑️ Cleared old pending Integration (>24h)")
+                print("📱 ❌ Failed to decode JSON from data")
             }
         } else {
-            print("📱 No pending Integration found")
+            print("📱 No pending Integration data in UserDefaults")
         }
     }
     
