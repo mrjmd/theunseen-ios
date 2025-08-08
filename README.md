@@ -28,63 +28,116 @@ Services:
 Firebase Authentication: For user sign-up/sign-in using Apple's native biometrics (Face ID/Touch ID).
 Firestore: A NoSQL database to act as our ANIMA Ledger and manage user state.
 Cloud Functions for Firebase: To run server-side logic for validating Resonance Scores and updating the ANIMA ledger.
-2. Data Flow & Architecture
-MVP User Journey: "The Path"
-Authentication:
-User opens the app for the first time.
-Prompted to create an account using Face ID/Touch ID.
-The app uses Firebase Auth to create a new user, returning a unique Firebase UID. This UID is the user's Private ID. It is stored securely in the device's Keychain.
-Discovery & Session Initiation:
-User taps "Begin the Path."
-The app activates the Multipeer Connectivity advertiser/browser, searching for other Initiates. To conserve battery, this scan will have a 2-minute timeout before prompting the user to try again.
-When another device is discovered, the apps automatically establish a Multipeer connection.
-The Handshake:
-The clients perform a Noise Protocol XX handshake over the established connection. This generates ephemeral session keys.
-The clients then make a single, brief call to a Firebase Cloud Function, sending their UIDs and the Session ID. The function validates that both UIDs are active, legitimate users and logs the session start time for abuse prevention. This is the only server interaction during the session.
-A secure, E2E encrypted "container" is now active.
-The Interaction:
-The app serves the Level 1 prompts.
-All messages are encrypted with the session keys and sent directly device-to-device. The server is completely blind.
-Session End & ANIMA Update:
-The session concludes. The connection is terminated, and the ephemeral session keys are destroyed.
+2. Core Game Loop & "The Convergence" Flow
+
+This section details the end-to-end user journey for a complete Level 1 interaction.
+
+    Initiation & Onboarding:
+
+        The user opens the app to a "Veiled Loading Screen" featuring our alchemical logo and mythological text.
+
+        The user is prompted for Face ID / Touch ID to "present their unique signature." This silently creates their secure, anonymous Firebase account.
+
+        The user enters the "PathLaunchView," the simple "Normie Mode" screen to begin seeking another Initiate.
+
+    The Digital Container:
+
+        Upon finding a peer, a secure, E2E encrypted P2P session is established.
+
+        The ChatView appears, and the first Level 1 prompt is served to both users.
+
+    Meaningful Interaction Threshold:
+
+        The app's P2PConnectivityService will monitor the session.
+
+        A "Meaningful Interaction" is achieved when two conditions are met:
+
+            Duration: The session has been active for at least 2.5 minutes (150 seconds).
+
+            Reciprocity: Each participant has sent at least three messages.
+
+        Until this threshold is met, no ANIMA is awarded beyond the initial connection bonus.
+
+    "The Convergence" - The In-Person Invitation:
+
+        Once the threshold is met, a new button appears in the ChatView for both users: "Propose the Convergence."
+
+        When one user taps this button, the other user receives a full-screen alert: [User's Anonymous ID] is attempting The Convergence. Do you accept?
+
+        A 30-second countdown timer is displayed. The user must accept before the timer expires.
+
+        If declined or timed out: The initiator is notified. The app presents them with a solo reflection prompt to gamify the rejection experience and awards a small amount of ANIMA for their courage. The digital chat can continue.
+
+        If accepted: Both users proceed to the next step.
+
+    The Meetup:
+
+        The user who initiated "The Convergence" is prompted to describe their location and appearance (e.g., "I'm by the fountain, wearing a red scarf"). This description is sent to the other user.
+
+        The app's UI shifts to a "Convergence" screen, showing the description and a single button: "Confirm Arrival."
+
+    The Digital Handshake - Proving the Meetup:
+
+        When both users are in close physical proximity and have tapped "Confirm Arrival," their phones will perform a quick, automatic, low-range P2P handshake.
+
+        This successful handshake verifies the in-person meetup.
+
+    The In-Person Container:
+
+        Upon successful verification, the app presents both users with a new, deeper prompt designed for in-person interaction.
+
+        A 5-minute shared timer starts, creating a safe, time-boxed container for the conversation.
+
+    Closing the Container:
+
+        When the timer ends, the session is complete. The P2P connection is terminated.
+
+        Users are prompted to mutually agree on a single quote or takeaway from their interaction to save as a shared "artifact." For the MVP, this artifact is private. A future update will allow users to share these artifacts publicly (e.g., to social media) with mutual consent, providing a mechanism for viral growth.
+
+        After a 5-minute cooldown period (to allow users to physically separate), both will receive a push notification to provide private feedback on the interaction (the "Resonance Score"). This score will determine the final ANIMA multiplier for the session.
 Each user is presented with the private feedback screen ("What did you notice in yourself?" and the "Resonance Score" slider).
 Each user's client independently sends their UID, the Session ID, and their Resonance Score to a Firebase Cloud Function.
 The Cloud Function waits for both reports for that Session ID. If both scores are above a certain threshold (e.g., 80%), it applies the ANIMA multiplier and updates both users' balances in the Firestore ledger.
 3. Firestore Database Schema (MVP)
 /users/{userId}
-  - privateId: "Firebase_UID"
+  - uid: "Firebase_UID"
   - level: 1
-  - animaPoints: 150
+  - animaPoints: 100
   - createdAt: Timestamp
-  - lastSessionAt: Timestamp
+  - blockedUsers: ["UID_of_Blocked_User_1", "UID_of_Blocked_User_2"] // For the Block/Report feature
 
 /sessions/{sessionId}
-  - userA_Id: "Firebase_UID"
-  - userB_Id: "Firebase_UID"
-  - userA_Resonance: 8.5
-  - userB_Resonance: 9.0
-  - status: "completed"
-  - createdAt: Timestamp
+  // This can be simplified for the MVP, as most logic is client-side.
+  // We may only need to log metadata for analytics and safety.
+  - participants: ["UID_1", "UID_2"]
+  - initiatedAt: Timestamp
+  - convergenceCompleted: true/false
+  - resonanceScoreA: 8.5 // Submitted after cooldown
+  - resonanceScoreB: 9.0 // Submitted after cooldown
 
 
-III. Development & Launch Roadmap (9-Month Plan)
+III. Development & Launch Roadmap
 This is a phased plan focused on iterative development, testing, and risk mitigation.
-Phase 0: Foundation (Weeks 1-2)
-[ ] DevOps/SRE: Set up Firebase project (Auth, Firestore, Functions).
-[ ] DevOps/SRE: Configure CI/CD pipeline using GitHub Actions and Fastlane for automated builds, testing, and deployment to TestFlight.
-[ ] Lead Engineer: Establish Git repository with a clear branching strategy (e.g., GitFlow).
-[ ] Lead Engineer: Create the initial Xcode project, configure dependencies (NoiseKit, Firebase SDKs), and set up the MVVM architecture shell.
-[ ] Designer: Finalize the Design System Tokens for the "Normie Mode" UI in Figma.
-Phase 1: The Core Container (Weeks 3-8)
-[ ] Lead Engineer: Implement device discovery and session management using the Multipeer Connectivity framework.
-[ ] Lead Engineer: Integrate the Noise Protocol for the E2E encrypted handshake and message transport.
-[ ] QA Lead: Develop a test harness to simulate two devices interacting to validate the P2P connection and encryption without needing two physical devices for every test run.
-[ ] Designer/Engineer: Build the basic, functional UI for the chat interface ("The Path").
-Phase 2: The Blind Gatekeeper (Weeks 9-12)
-[ ] Lead Engineer: Integrate Firebase Authentication with Face ID/Touch ID.
-[ ] Lead Engineer: Build the Firestore ledger and the Cloud Functions for initiating sessions and calculating ANIMA points.
-[ ] Behavioral Psychologist/Designer: Design and implement the user flow for the Block/Report feature. This includes the in-app reporting interface and the confirmation/support messages the user receives post-submission.
-[ ] QA Lead: Write unit and integration tests for all server interactions.
+Phase 0: Foundation
+[x] DevOps/SRE: Set up Firebase project (Auth, Firestore, Functions).
+[x] DevOps/SRE: Configure CI/CD pipeline using GitHub Actions and Fastlane for automated builds, testing, and deployment to TestFlight.
+[x] Lead Engineer: Establish Git repository with a clear branching strategy (e.g., GitFlow).
+[x] Lead Engineer: Create the initial Xcode project, configure dependencies (NoiseKit, Firebase SDKs), and set up the MVVM architecture shell.
+[x] Designer: Finalize the Design System Tokens for the "Normie Mode" UI in Figma.
+Phase 1: The Core Container
+[x] Lead Engineer: Implement device discovery and session management using the Multipeer Connectivity framework.
+[x] Lead Engineer: Integrate the Noise Protocol for the E2E encrypted handshake and message transport.
+[x] QA Lead: Develop a test harness to simulate two devices interacting to validate the P2P connection and encryption without needing two physical devices for every test run.
+[x] Designer/Engineer: Build the basic, functional UI for the chat interface ("The Path").
+Phase 2: The Blind Gatekeeper & Core Loop (Weeks 9-14)
+[x] Lead Engineer: Integrate Firebase Anonymous Authentication.
+[x] Lead Engineer: Integrate Biometric Authentication (Face ID/Touch ID) to secure the anonymous user account.
+[x] Lead Engineer: Build the initial Firestore ledger.
+[ ] Game Designer/Engineer: Implement the Level 1 prompt system.
+[ ] Lead Engineer/Game Designer: Implement the "Meaningful Interaction" timer and message count logic.
+[ ] Designer/Engineer: Build the UI for "The Convergence" invitation flow, including the 30-second timer.
+[ ] Lead Engineer: Implement the close-range "Digital Handshake" for meetup verification.
+[ ] Behavioral Psychologist/Designer: Design and implement the user flow for the Block/Report feature.
 Phase 3: Polish & Internal Alpha (Weeks 13-16)
 [ ] Entire Team: Dogfooding. We become the first Initiates. Daily mandatory sessions.
 [ ] Designer/Engineer: Refine all UI/UX elements, animations, and transitions based on feedback.

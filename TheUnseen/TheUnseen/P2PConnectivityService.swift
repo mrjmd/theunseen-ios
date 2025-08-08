@@ -8,6 +8,8 @@ class P2PConnectivityService: NSObject, ObservableObject {
     @Published var isHandshakeComplete = false
     @Published var sessionStartTime: Date?
     @Published var currentPrompt: String?
+    @Published var isMeaningfulInteraction = false
+    @Published var connectionDuration: TimeInterval = 0
 
     private let serviceType = "unseen-app"
     let myPeerID = MCPeerID(displayName: UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString)
@@ -22,8 +24,14 @@ class P2PConnectivityService: NSObject, ObservableObject {
     private var isDiscoveryActive = false
     private var reconnectionTimer: Timer?
     private let reconnectionDelay: TimeInterval = 5.0  // Increased to 5 seconds for stability
+    
+    // Meaningful Interaction requirements (per README)
     private var hasAwardedAnimaForSession = false
-    private let minimumInteractionMessages = 3  // Require at least 3 message exchanges for ANIMA
+    private let minimumSessionDuration: TimeInterval = 150  // 2.5 minutes
+    private let minimumMessagesPerUser = 3  // Each user must send at least 3 messages
+    @Published var sentMessageCount = 0
+    @Published var receivedMessageCount = 0
+    private var sessionTimer: Timer?
     
     // Keepalive mechanism
     private var keepaliveTimer: Timer?
@@ -102,10 +110,10 @@ class P2PConnectivityService: NSObject, ObservableObject {
         if let encryptedData = noiseService.encrypt(message) {
             send(data: encryptedData, to: peerID)
             
-            // Track our own sent messages for ANIMA calculation
+            // Track our own sent messages (don't add to messages array - UI handles that)
             DispatchQueue.main.async {
-                self.messages.append(ChatMessage(text: "[sent]\(message)"))
-                self.checkAndAwardAnimaForMeaningfulInteraction()
+                self.sentMessageCount += 1
+                self.checkMeaningfulInteraction()
             }
         }
     }
@@ -159,10 +167,18 @@ class P2PConnectivityService: NSObject, ObservableObject {
                     let systemContent = decryptedText.replacingOccurrences(of: "[SYSTEM]", with: "")
                     print("📥 Received system message: \(systemContent)")
                     
-                    // Post notification for prompt sync
-                    if systemContent.hasPrefix("PROMPT:") {
+                    // Handle prompt ID sync (new format)
+                    if systemContent.hasPrefix("PROMPT_ID:") {
+                        let promptId = systemContent.replacingOccurrences(of: "PROMPT_ID:", with: "")
+                        print("📥 Received prompt ID: \(promptId)")
+                        DispatchQueue.main.async {
+                            PromptsService.shared.receivePromptId(promptId, using: self)
+                        }
+                    }
+                    // Legacy prompt sync support
+                    else if systemContent.hasPrefix("PROMPT:") {
                         let prompt = systemContent.replacingOccurrences(of: "PROMPT:", with: "")
-                        print("📥 Setting shared prompt: \(prompt)")
+                        print("📥 Setting shared prompt (legacy): \(prompt)")
                         DispatchQueue.main.async {
                             self.currentPrompt = prompt
                         }
@@ -173,7 +189,8 @@ class P2PConnectivityService: NSObject, ObservableObject {
                 print("🎉 Decrypted message: \(decryptedText)")
                 DispatchQueue.main.async {
                     self.messages.append(ChatMessage(text: decryptedText))
-                    self.checkAndAwardAnimaForMeaningfulInteraction()
+                    self.receivedMessageCount += 1
+                    self.checkMeaningfulInteraction()
                 }
             }
         } else {
@@ -192,6 +209,7 @@ class P2PConnectivityService: NSObject, ObservableObject {
                 DispatchQueue.main.async {
                     self.isHandshakeComplete = true
                     self.sessionStartTime = Date()
+                    self.startSessionTimer()
                     print("Handshake complete. Session started.")
                     // Do NOT award ANIMA here - wait for meaningful interaction
                 }
@@ -278,8 +296,13 @@ extension P2PConnectivityService: MCSessionDelegate {
                     self.isHandshakeComplete = false
                     self.sessionStartTime = nil
                     self.hasAwardedAnimaForSession = false
+                    self.isMeaningfulInteraction = false
+                    self.connectionDuration = 0
+                    self.sentMessageCount = 0
+                    self.receivedMessageCount = 0
                     self.messages.removeAll() // Clear messages on disconnect
                     self.stopKeepalive()  // Stop keepalive timer
+                    self.stopSessionTimer()  // Stop session timer
                     
                     // Schedule reconnection with delay to prevent flapping
                     self.scheduleReconnection()
@@ -315,40 +338,77 @@ extension P2PConnectivityService: MCSessionDelegate {
         }
     }
     
-    // Award ANIMA only after meaningful interaction
-    private func checkAndAwardAnimaForMeaningfulInteraction() {
-        // Log current state for debugging
-        let sentCount = messages.filter { $0.text.hasPrefix("[sent]") }.count
-        let receivedCount = messages.filter { !$0.text.hasPrefix("[sent]") }.count
-        print("📊 Message count - Sent: \(sentCount), Received: \(receivedCount), Total: \(messages.count)")
+    // Check for meaningful interaction based on time and message count
+    private func checkMeaningfulInteraction() {
+        // Log current state
+        print("📊 Session Status - Duration: \(Int(connectionDuration))s, Sent: \(sentMessageCount), Received: \(receivedMessageCount)")
         
-        guard !hasAwardedAnimaForSession,
-              messages.count >= minimumInteractionMessages,
-              isHandshakeComplete else { 
-            if hasAwardedAnimaForSession {
-                print("ANIMA already awarded for this session")
-            } else if messages.count < minimumInteractionMessages {
-                print("Need \(minimumInteractionMessages - messages.count) more messages for ANIMA")
+        // Check if we meet both requirements
+        let hasEnoughTime = connectionDuration >= minimumSessionDuration
+        let hasEnoughSentMessages = sentMessageCount >= minimumMessagesPerUser
+        let hasEnoughReceivedMessages = receivedMessageCount >= minimumMessagesPerUser
+        
+        if hasEnoughTime && hasEnoughSentMessages && hasEnoughReceivedMessages {
+            if !isMeaningfulInteraction {
+                DispatchQueue.main.async {
+                    self.isMeaningfulInteraction = true
+                    print("✅ Meaningful Interaction achieved! Duration: \(Int(self.connectionDuration))s, Messages: \(self.sentMessageCount) sent, \(self.receivedMessageCount) received")
+                    
+                    // Award ANIMA for meaningful interaction (not just connection)
+                    if !self.hasAwardedAnimaForSession {
+                        self.hasAwardedAnimaForSession = true
+                        let firestoreService = FirestoreService()
+                        firestoreService.awardAnimaForConnection()
+                        print("✨ ANIMA awarded for meaningful interaction!")
+                    }
+                }
             }
-            return 
+        } else {
+            // Provide feedback on what's still needed
+            var needs = [String]()
+            if !hasEnoughTime {
+                let remaining = Int(minimumSessionDuration - connectionDuration)
+                needs.append("\(remaining)s more time")
+            }
+            if !hasEnoughSentMessages {
+                let remaining = minimumMessagesPerUser - sentMessageCount
+                needs.append("\(remaining) more sent messages")
+            }
+            if !hasEnoughReceivedMessages {
+                let remaining = minimumMessagesPerUser - receivedMessageCount
+                needs.append("\(remaining) more received messages")
+            }
+            if !needs.isEmpty {
+                print("⏳ Need for meaningful interaction: \(needs.joined(separator: ", "))")
+            }
+        }
+    }
+    
+    // Start tracking session duration
+    private func startSessionTimer() {
+        stopSessionTimer() // Ensure no duplicate timers
+        
+        // Update connection duration every second
+        sessionTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self = self,
+                  let startTime = self.sessionStartTime else { return }
+            
+            DispatchQueue.main.async {
+                self.connectionDuration = Date().timeIntervalSince(startTime)
+                
+                // Check if we've achieved meaningful interaction
+                self.checkMeaningfulInteraction()
+            }
         }
         
-        // Check if we have a mix of sent and received messages (real conversation)
-        let hasSentMessages = sentCount > 0
-        let hasReceivedMessages = receivedCount > 0
-        
-        guard hasSentMessages && hasReceivedMessages else { 
-            print("Waiting for two-way conversation (sent: \(hasSentMessages), received: \(hasReceivedMessages))")
-            return 
-        }
-        
-        hasAwardedAnimaForSession = true
-        
-        // Award ANIMA through FirestoreService
-        let firestoreService = FirestoreService()
-        firestoreService.awardAnimaForConnection()
-        
-        print("✨ Meaningful interaction achieved! ANIMA awarded after \(messages.count) messages.")
+        print("⏱️ Session timer started")
+    }
+    
+    // Stop tracking session duration
+    private func stopSessionTimer() {
+        sessionTimer?.invalidate()
+        sessionTimer = nil
+        print("⏱️ Session timer stopped")
     }
     
     // Keepalive mechanism to prevent connection timeout

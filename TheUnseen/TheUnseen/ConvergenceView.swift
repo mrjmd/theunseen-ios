@@ -1,0 +1,247 @@
+import SwiftUI
+
+struct ConvergenceView: View {
+    @EnvironmentObject var p2pService: P2PConnectivityService
+    @StateObject private var promptsService = PromptsService.shared
+    @State private var timeRemaining = 300 // 5 minutes
+    @State private var timer: Timer?
+    @State private var showingArtifactCreation = false
+    @State private var sharedArtifact = ""
+    
+    var formattedTime: String {
+        let minutes = timeRemaining / 60
+        let seconds = timeRemaining % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            VStack(spacing: 8) {
+                Text("The Convergence")
+                    .font(.title2)
+                    .fontWeight(.light)
+                    .tracking(2)
+                
+                Text("In-Person Container")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .tracking(1)
+            }
+            .padding()
+            
+            // Timer
+            ZStack {
+                Circle()
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 4)
+                    .frame(width: 120, height: 120)
+                
+                Circle()
+                    .trim(from: 0, to: Double(timeRemaining) / 300.0)
+                    .stroke(
+                        LinearGradient(
+                            colors: [.purple, .indigo],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                    )
+                    .frame(width: 120, height: 120)
+                    .rotationEffect(.degrees(-90))
+                    .animation(.linear(duration: 1), value: timeRemaining)
+                
+                VStack(spacing: 4) {
+                    Text(formattedTime)
+                        .font(.system(size: 28, weight: .light, design: .monospaced))
+                    Text("remaining")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
+            }
+            .padding(.vertical, 20)
+            
+            // Convergence Prompt
+            if let convergencePrompt = promptsService.currentPrompt?.convergencePrompt {
+                VStack(spacing: 16) {
+                    Text("Your Sacred Task")
+                        .font(.caption)
+                        .foregroundColor(.purple)
+                        .tracking(1)
+                    
+                    Text(convergencePrompt)
+                        .font(.system(size: 18, weight: .light))
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 30)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 20)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color(UIColor.secondarySystemBackground))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [.purple.opacity(0.3), .indigo.opacity(0.3)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
+                )
+                .padding(.horizontal)
+            }
+            
+            Spacer()
+            
+            // Instructions
+            VStack(spacing: 12) {
+                HStack(spacing: 8) {
+                    Image(systemName: "eye")
+                        .foregroundColor(.purple)
+                    Text("Maintain presence")
+                        .font(.caption)
+                }
+                
+                HStack(spacing: 8) {
+                    Image(systemName: "heart")
+                        .foregroundColor(.purple)
+                    Text("Stay curious, not judgmental")
+                        .font(.caption)
+                }
+                
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .foregroundColor(.purple)
+                    Text("Notice what emerges")
+                        .font(.caption)
+                }
+            }
+            .padding()
+            .background(Color(UIColor.tertiarySystemBackground))
+            .cornerRadius(12)
+            .padding()
+            
+            // Complete button (appears when timer ends)
+            if timeRemaining <= 0 {
+                Button(action: {
+                    showingArtifactCreation = true
+                }) {
+                    HStack {
+                        Image(systemName: "seal")
+                        Text("Create Shared Artifact")
+                        Image(systemName: "arrow.right")
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 14)
+                    .background(
+                        LinearGradient(
+                            colors: [.purple, .indigo],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(25)
+                }
+                .padding()
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .preferredColorScheme(.light) // Keep Level 1 in light mode
+        .onAppear {
+            startTimer()
+            promptsService.transitionToConvergence()
+        }
+        .onDisappear {
+            timer?.invalidate()
+            promptsService.resetToDigital()
+        }
+        .sheet(isPresented: $showingArtifactCreation) {
+            ArtifactCreationView(sharedArtifact: $sharedArtifact)
+        }
+    }
+    
+    private func startTimer() {
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            if timeRemaining > 0 {
+                timeRemaining -= 1
+            } else {
+                timer?.invalidate()
+                // Play a gentle completion sound or haptic
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            }
+        }
+    }
+}
+
+// Artifact Creation View
+struct ArtifactCreationView: View {
+    @Binding var sharedArtifact: String
+    @Environment(\.dismiss) var dismiss
+    @State private var artifactText = ""
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                Text("Create Your Shared Artifact")
+                    .font(.title3)
+                    .fontWeight(.light)
+                    .padding(.top)
+                
+                Text("Together, choose a single quote or insight from your interaction to preserve.")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                
+                TextField("Enter your shared wisdom...", text: $artifactText, axis: .vertical)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .lineLimit(3...6)
+                    .padding()
+                
+                Spacer()
+                
+                Button(action: {
+                    sharedArtifact = artifactText
+                    // Save to Firebase here
+                    dismiss()
+                }) {
+                    Text("Seal the Artifact")
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(
+                            LinearGradient(
+                                colors: [.purple, .indigo],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .cornerRadius(12)
+                }
+                .disabled(artifactText.isEmpty)
+                .padding()
+            }
+            .navigationTitle("Shared Artifact")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+#Preview {
+    NavigationStack {
+        ConvergenceView()
+            .environmentObject(P2PConnectivityService())
+    }
+}
