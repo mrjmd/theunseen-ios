@@ -5,8 +5,11 @@
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_unseen-app._tcp.</string>
+		<string>_unseen-converge._tcp.</string>
 	</array>
 	<key>NSFaceIDUsageDescription</key>
 	<string>The Unseen uses Face ID to secure your anonymous identity and protect your ANIMA balance.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>The Unseen uses your local network to verify proximity during The Convergence meetup.</string>
 </dict>
 </plist>

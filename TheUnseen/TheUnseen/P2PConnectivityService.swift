@@ -27,11 +27,13 @@ class P2PConnectivityService: NSObject, ObservableObject {
     
     // Meaningful Interaction requirements (per README)
     private var hasAwardedAnimaForSession = false
-    private let minimumSessionDuration: TimeInterval = 150  // 2.5 minutes
+    // TODO: DEVELOPMENT MODE - Change back to 150 seconds (2.5 minutes) for production!
+    private let minimumSessionDuration: TimeInterval = 30  // 30 seconds for dev testing (should be 150)
     private let minimumMessagesPerUser = 3  // Each user must send at least 3 messages
     @Published var sentMessageCount = 0
     @Published var receivedMessageCount = 0
     private var sessionTimer: Timer?
+    private var lastLoggedMessageCount = 0
     
     // Keepalive mechanism
     private var keepaliveTimer: Timer?
@@ -158,7 +160,7 @@ class P2PConnectivityService: NSObject, ObservableObject {
             if let decryptedText = noiseService.decrypt(data) {
                 // Ignore keepalive messages
                 if decryptedText == keepaliveMessage {
-                    print("📡 Keepalive received from \(peerID.displayName)")
+                    // Silently ignore keepalive messages
                     return
                 }
                 
@@ -181,6 +183,13 @@ class P2PConnectivityService: NSObject, ObservableObject {
                         print("📥 Setting shared prompt (legacy): \(prompt)")
                         DispatchQueue.main.async {
                             self.currentPrompt = prompt
+                        }
+                    }
+                    // Handle Convergence and Meetup messages - add them to messages array for UI to see
+                    else if systemContent.contains("CONVERGENCE") || systemContent.contains("MEETUP") || systemContent.contains("HANDSHAKE") {
+                        DispatchQueue.main.async {
+                            // Add to messages array so UI components can detect it
+                            self.messages.append(ChatMessage(text: "[SYSTEM]\(systemContent)"))
                         }
                     }
                     return
@@ -340,8 +349,14 @@ extension P2PConnectivityService: MCSessionDelegate {
     
     // Check for meaningful interaction based on time and message count
     private func checkMeaningfulInteraction() {
-        // Log current state
-        print("📊 Session Status - Duration: \(Int(connectionDuration))s, Sent: \(sentMessageCount), Received: \(receivedMessageCount)")
+        // Only log every 10 seconds or when messages change
+        let shouldLog = Int(connectionDuration) % 10 == 0 || 
+                       (sentMessageCount + receivedMessageCount) != lastLoggedMessageCount
+        
+        if shouldLog {
+            print("📊 Session: \(Int(connectionDuration))s, Sent: \(sentMessageCount), Received: \(receivedMessageCount)")
+            lastLoggedMessageCount = sentMessageCount + receivedMessageCount
+        }
         
         // Check if we meet both requirements
         let hasEnoughTime = connectionDuration >= minimumSessionDuration
@@ -363,23 +378,21 @@ extension P2PConnectivityService: MCSessionDelegate {
                     }
                 }
             }
-        } else {
-            // Provide feedback on what's still needed
+        } else if shouldLog && !isMeaningfulInteraction {
+            // Only show needs occasionally
             var needs = [String]()
             if !hasEnoughTime {
                 let remaining = Int(minimumSessionDuration - connectionDuration)
-                needs.append("\(remaining)s more time")
+                needs.append("\(remaining)s")
             }
             if !hasEnoughSentMessages {
-                let remaining = minimumMessagesPerUser - sentMessageCount
-                needs.append("\(remaining) more sent messages")
+                needs.append("\(minimumMessagesPerUser - sentMessageCount) sent")
             }
             if !hasEnoughReceivedMessages {
-                let remaining = minimumMessagesPerUser - receivedMessageCount
-                needs.append("\(remaining) more received messages")
+                needs.append("\(minimumMessagesPerUser - receivedMessageCount) received")
             }
             if !needs.isEmpty {
-                print("⏳ Need for meaningful interaction: \(needs.joined(separator: ", "))")
+                print("⏳ Need: \(needs.joined(separator: ", "))")
             }
         }
     }
@@ -426,7 +439,7 @@ extension P2PConnectivityService: MCSessionDelegate {
             
             if let encryptedData = noiseService.encrypt(self.keepaliveMessage) {
                 self.send(data: encryptedData, to: peerID)
-                print("📡 Keepalive sent to \(peerID.displayName)")
+                // Silently send keepalive
             }
         }
     }

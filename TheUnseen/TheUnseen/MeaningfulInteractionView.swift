@@ -3,7 +3,8 @@ import SwiftUI
 struct MeaningfulInteractionView: View {
     @EnvironmentObject var p2pService: P2PConnectivityService
     
-    private let minimumDuration: TimeInterval = 150 // 2.5 minutes
+    // TODO: DEVELOPMENT MODE - Change back to 150 seconds (2.5 minutes) for production!
+    private let minimumDuration: TimeInterval = 30 // 30 seconds for dev testing (should be 150)
     private let minimumMessages = 3
     
     var timeProgress: Double {

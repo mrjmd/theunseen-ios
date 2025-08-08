@@ -71,13 +71,15 @@ struct VeiledLoadingView: View {
                     startGlitchAnimations()
                 }
                 
-                // Koan text
+                // Koan text with fixed frame to prevent layout shift
                 Text(currentText)
                     .font(.system(size: 16, weight: .thin, design: .monospaced))
                     .foregroundColor(.white.opacity(textOpacity))
                     .tracking(2)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
+                    .frame(height: 60) // Fixed height to prevent icon movement
+                    .frame(maxWidth: .infinity)
                     .onAppear {
                         // Fade in first text
                         withAnimation(.easeIn(duration: 1).delay(0.5)) {

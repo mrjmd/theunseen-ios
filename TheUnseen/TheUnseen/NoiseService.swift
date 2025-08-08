@@ -120,7 +120,7 @@ class NoiseService {
         
         do {
             let sealedBox = try AES.GCM.seal(data, using: sendingKey)
-            print("✉️ Encrypted message successfully.")
+            // Successfully encrypted
             return sealedBox.combined
         } catch {
             print("Error encrypting message: \(error)")

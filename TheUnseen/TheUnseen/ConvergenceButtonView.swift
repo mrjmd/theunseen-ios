@@ -9,6 +9,7 @@ struct ConvergenceButtonView: View {
     @State private var requestFromPeer: String = ""
     @State private var countdownTimer: Timer?
     @State private var timeRemaining = 30
+    @State private var navigateToMeetup = false
     
     var body: some View {
         VStack(spacing: 12) {
@@ -86,22 +87,26 @@ struct ConvergenceButtonView: View {
             }
         } message: {
             if receivedConvergenceRequest {
-                Text("\(requestFromPeer) is attempting The Convergence.\n\nDo you accept?\n\nTime remaining: \(timeRemaining) seconds")
+                Text("✨ Your partner is ready to meet in person.\n\nThis sacred moment requires both souls to agree.\n\n⏱️ \(timeRemaining) seconds to decide")
+                    .font(.system(size: 15))
             } else {
-                Text("The Convergence was declined or timed out. The digital container continues.")
+                Text("The moment has passed. The digital container continues, awaiting the next opportunity.")
             }
         }
         .onReceive(p2pService.$messages) { messages in
             // Listen for Convergence system messages
             if let lastMessage = messages.last {
-                if lastMessage.text.contains("[CONVERGENCE_REQUEST]") {
+                if lastMessage.text.contains("CONVERGENCE_REQUEST") {
                     handleConvergenceRequest(from: p2pService.connectedPeer?.displayName ?? "Initiate")
-                } else if lastMessage.text.contains("[CONVERGENCE_ACCEPTED]") {
+                } else if lastMessage.text.contains("CONVERGENCE_ACCEPTED") {
                     handleConvergenceAccepted()
-                } else if lastMessage.text.contains("[CONVERGENCE_DECLINED]") {
+                } else if lastMessage.text.contains("CONVERGENCE_DECLINED") {
                     handleConvergenceDeclined()
                 }
             }
+        }
+        .navigationDestination(isPresented: $navigateToMeetup) {
+            MeetupFlowView()
         }
     }
     
@@ -120,11 +125,11 @@ struct ConvergenceButtonView: View {
     
     private func handleConvergenceRequest(from peer: String) {
         receivedConvergenceRequest = true
-        requestFromPeer = peer
+        requestFromPeer = "Your partner"  // Use friendly name instead of ID
         timeRemaining = 30
         showingAlert = true
         
-        // Start countdown timer
+        // Start countdown timer that updates the alert
         countdownTimer?.invalidate()
         countdownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
             timeRemaining -= 1
@@ -134,6 +139,12 @@ struct ConvergenceButtonView: View {
                 receivedConvergenceRequest = false
                 // Auto-decline on timeout
                 declineConvergence()
+            } else if timeRemaining % 5 == 0 {
+                // Force alert to refresh every 5 seconds to show countdown
+                showingAlert = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    showingAlert = true
+                }
             }
         }
     }
@@ -141,8 +152,9 @@ struct ConvergenceButtonView: View {
     private func acceptConvergence() {
         countdownTimer?.invalidate()
         p2pService.sendSystemMessage("CONVERGENCE_ACCEPTED")
-        // Navigate to meetup flow (to be implemented)
+        // Navigate to meetup flow
         print("✅ Convergence accepted! Moving to meetup flow...")
+        navigateToMeetup = true
     }
     
     private func declineConvergence() {
@@ -155,7 +167,8 @@ struct ConvergenceButtonView: View {
         // The other user accepted our request
         convergenceInitiated = false
         print("✅ Convergence accepted by peer! Moving to meetup flow...")
-        // Navigate to meetup flow (to be implemented)
+        // Navigate to meetup flow
+        navigateToMeetup = true
     }
     
     private func handleConvergenceDeclined() {
