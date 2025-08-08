@@ -52,4 +52,107 @@ class FirestoreService: ObservableObject {
             }
         }
     }
+    
+    // Save reflection and scores for The Integration
+    func saveReflection(sessionId: String, reflection: String, promptIndex: Int, 
+                       presenceScore: Int, courageScore: Int, mirrorScore: Int) {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        
+        let reflectionData: [String: Any] = [
+            "userId": userId,
+            "sessionId": sessionId,
+            "reflection": reflection,
+            "promptIndex": promptIndex,
+            "presenceScore": presenceScore,
+            "courageScore": courageScore,
+            "mirrorScore": mirrorScore,
+            "timestamp": FieldValue.serverTimestamp()
+        ]
+        
+        // Save to sessions collection
+        db.collection("sessions").document(sessionId)
+            .collection("reflections").document(userId)
+            .setData(reflectionData) { error in
+                if let error = error {
+                    print("❌ Error saving reflection: \(error)")
+                } else {
+                    print("✅ Reflection saved for session \(sessionId)")
+                }
+            }
+    }
+    
+    // Calculate and award ANIMA based on resonance scores
+    func calculateResonanceMultiplier(sessionId: String, completion: @escaping (Int) -> Void) {
+        guard let userId = Auth.auth().currentUser?.uid else { 
+            completion(0)
+            return 
+        }
+        
+        let sessionRef = db.collection("sessions").document(sessionId)
+        
+        // Get both users' reflections
+        sessionRef.collection("reflections").getDocuments { snapshot, error in
+            guard let documents = snapshot?.documents, documents.count == 2 else {
+                print("⏳ Waiting for both users to submit reflections")
+                completion(0)
+                return
+            }
+            
+            // Extract mirror scores from both users
+            var mirrorScores: [Int] = []
+            var userCourageScore = 0
+            
+            for doc in documents {
+                let data = doc.data()
+                if let mirror = data["mirrorScore"] as? Int {
+                    mirrorScores.append(mirror)
+                }
+                if doc.documentID == userId, let courage = data["courageScore"] as? Int {
+                    userCourageScore = courage
+                }
+            }
+            
+            guard mirrorScores.count == 2 else {
+                completion(0)
+                return
+            }
+            
+            // Calculate multiplier based on lower mirror score
+            let sharedMirrorScore = min(mirrorScores[0], mirrorScores[1])
+            let multiplier: Double
+            
+            switch sharedMirrorScore {
+            case 0...50:
+                multiplier = 1.0
+            case 51...80:
+                multiplier = 1.5
+            case 81...95:
+                multiplier = 2.0
+            case 96...100:
+                multiplier = 3.0  // The jackpot!
+            default:
+                multiplier = 1.0
+            }
+            
+            // Calculate final ANIMA
+            let baseANIMA = 50
+            let courageBonus = userCourageScore
+            let totalBeforeMultiplier = baseANIMA + courageBonus
+            let finalANIMA = Int(Double(totalBeforeMultiplier) * multiplier)
+            
+            // Award the ANIMA
+            let userRef = self.db.collection("users").document(userId)
+            userRef.updateData([
+                "animaPoints": FieldValue.increment(Int64(finalANIMA))
+            ]) { error in
+                if let error = error {
+                    print("❌ Error awarding resonance ANIMA: \(error)")
+                } else {
+                    print("✨ Awarded \(finalANIMA) ANIMA (base: \(baseANIMA), courage: \(courageBonus), multiplier: \(multiplier)x)")
+                }
+            }
+            
+            completion(finalANIMA)
+        }
+    }
 }

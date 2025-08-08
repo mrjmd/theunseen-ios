@@ -10,6 +10,8 @@ struct ConvergenceView: View {
     @State private var sharedArtifact = ""
     @State private var sessionComplete = false
     @State private var waitingForArtifact = false
+    @State private var showingIntegration = false
+    @State private var sessionId = UUID().uuidString
     
     var isInitiator: Bool {
         p2pService.myPeerID.displayName < (p2pService.connectedPeer?.displayName ?? "")
@@ -171,9 +173,31 @@ struct ConvergenceView: View {
                             )
                             .padding(.horizontal)
                         
-                        Text("✨ ANIMA will be awarded after cooldown")
+                        Text("✨ ANIMA will be awarded after The Integration")
                             .font(.caption2)
                             .foregroundColor(.purple)
+                        
+                        Button(action: {
+                            showingIntegration = true
+                        }) {
+                            HStack {
+                                Image(systemName: "flame")
+                                Text("Begin The Integration")
+                                Image(systemName: "arrow.right")
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 14)
+                            .background(
+                                LinearGradient(
+                                    colors: [.purple, .indigo],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .cornerRadius(25)
+                        }
+                        .padding(.top)
                     }
                     .padding()
                 } else if isInitiator && !waitingForArtifact {
@@ -239,21 +263,41 @@ struct ConvergenceView: View {
         }
         .sheet(isPresented: $showingArtifactCreation) {
             ArtifactCreationView(sharedArtifact: $sharedArtifact, onComplete: {
-                // Send artifact to peer
-                p2pService.sendSystemMessage("ARTIFACT_CREATED:\(sharedArtifact)")
+                // Send artifact to peer with session ID
+                p2pService.sendSystemMessage("ARTIFACT_CREATED:\(sharedArtifact)|SESSION:\(sessionId)")
                 waitingForArtifact = true
                 sessionComplete = true
             })
+        }
+        .fullScreenCover(isPresented: $showingIntegration) {
+            IntegrationView(sessionId: sessionId)
+                .environmentObject(p2pService)
         }
         .onReceive(p2pService.$messages) { messages in
             // Listen for artifact creation from peer
             if let lastMessage = messages.last {
                 if lastMessage.text.contains("ARTIFACT_CREATED:") {
-                    let artifact = lastMessage.text
+                    let fullMessage = lastMessage.text
                         .replacingOccurrences(of: "[SYSTEM]ARTIFACT_CREATED:", with: "")
-                    DispatchQueue.main.async {
-                        self.sharedArtifact = artifact
-                        self.sessionComplete = true
+                    
+                    // Extract artifact and session ID
+                    if let artifactRange = fullMessage.range(of: "|SESSION:") {
+                        let artifact = String(fullMessage[..<artifactRange.lowerBound])
+                        let sessionPart = String(fullMessage[artifactRange.upperBound...])
+                        
+                        DispatchQueue.main.async {
+                            self.sharedArtifact = artifact
+                            if !sessionPart.isEmpty {
+                                self.sessionId = sessionPart
+                            }
+                            self.sessionComplete = true
+                        }
+                    } else {
+                        // Fallback for old format
+                        DispatchQueue.main.async {
+                            self.sharedArtifact = fullMessage
+                            self.sessionComplete = true
+                        }
                     }
                 }
             }

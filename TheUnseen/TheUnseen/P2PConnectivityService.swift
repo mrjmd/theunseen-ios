@@ -186,7 +186,7 @@ class P2PConnectivityService: NSObject, ObservableObject {
                         }
                     }
                     // Handle Convergence and Meetup messages - add them to messages array for UI to see
-                    else if systemContent.contains("CONVERGENCE") || systemContent.contains("MEETUP") || systemContent.contains("HANDSHAKE") || systemContent.contains("ARTIFACT_CREATED") {
+                    else if systemContent.contains("CONVERGENCE") || systemContent.contains("MEETUP") || systemContent.contains("HANDSHAKE") || systemContent.contains("ARTIFACT_CREATED") || systemContent.contains("RESONANCE_SCORES") {
                         DispatchQueue.main.async {
                             // Add to messages array so UI components can detect it
                             self.messages.append(ChatMessage(text: "[SYSTEM]\(systemContent)"))
