@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 struct IntegrationView: View {
     @EnvironmentObject var p2pService: P2PConnectivityService
@@ -215,11 +216,17 @@ struct IntegrationView: View {
                                         .foregroundColor(.gray)
                                 }
                             } else {
-                                Text("Waiting for your partner to complete their integration...")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal)
+                                VStack(spacing: 8) {
+                                    Text("Waiting for your partner to complete their integration...")
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                        .multilineTextAlignment(.center)
+                                    
+                                    Text("(Checking periodically)")
+                                        .font(.caption2)
+                                        .foregroundColor(.gray.opacity(0.6))
+                                }
+                                .padding(.horizontal)
                             }
                             
                             Spacer()
@@ -232,7 +239,7 @@ struct IntegrationView: View {
             .preferredColorScheme(.light) // Keep Level 1 in light mode
         }
         .onReceive(p2pService.$messages) { messages in
-            // Listen for peer's resonance scores
+            // Listen for peer's resonance scores (only relevant during active P2P session)
             if let lastMessage = messages.last {
                 if lastMessage.text.contains("RESONANCE_SCORES:") && !peerSubmitted {
                     DispatchQueue.main.async {
@@ -247,12 +254,21 @@ struct IntegrationView: View {
                 }
             }
         }
+        .onAppear {
+            // When opening from pending integration, immediately check if partner has submitted
+            // This handles the async case where users complete at different times
+            if p2pService.connectedPeer == nil && !hasSubmitted {
+                print("🔍 Opening Integration from pending state, will check partner status after submission")
+            }
+        }
     }
     
     private func submitIntegration() {
-        // Send scores to peer for multiplier calculation
-        let scoreData = "RESONANCE_SCORES:presence=\(Int(presenceScore)),courage=\(Int(courageScore)),mirror=\(Int(mirrorScore))"
-        p2pService.sendSystemMessage(scoreData)
+        // Send scores to peer for multiplier calculation (only if connected)
+        if p2pService.connectedPeer != nil {
+            let scoreData = "RESONANCE_SCORES:presence=\(Int(presenceScore)),courage=\(Int(courageScore)),mirror=\(Int(mirrorScore))"
+            p2pService.sendSystemMessage(scoreData)
+        }
         
         // Store reflection in Firestore (not E2E encrypted for moderation)
         let firestoreService = FirestoreService()
@@ -275,8 +291,9 @@ struct IntegrationView: View {
         // Play haptic feedback
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         
-        // Check if peer has also submitted
-        if peerSubmitted && !checkingMultiplier {
+        // Always start checking for partner's submission
+        // This handles both sync (connected) and async (pending) cases
+        if !checkingMultiplier {
             checkingMultiplier = true
             checkForFinalMultiplier()
         }
@@ -284,44 +301,62 @@ struct IntegrationView: View {
     
     private func checkForFinalMultiplier() {
         // After both users submit, calculate final multiplier
+        print("🔄 Starting checkForFinalMultiplier for session: \(sessionId)")
         let firestoreService = FirestoreService()
         
         // Calculate base ANIMA while waiting
         let baseANIMA = 50
         let courageBonus = Int(courageScore)
         
-        // Retry logic for waiting for both reflections
-        var retryCount = 0
-        let maxRetries = 5
+        // Exponential backoff retry schedule (in seconds)
+        // 2s, 5s, 10s, 30s, 1m, 5m, 15m, 30m, 1h, 2h, 4h, 8h, 12h, final check at 23h
+        let retryDelays: [TimeInterval] = [
+            2, 5, 10, 30, 60, 
+            300, 900, 1800, 3600, 
+            7200, 14400, 28800, 43200, 
+            82800  // Final check at 23 hours
+        ]
+        var retryIndex = 0
         
         func attemptCalculation() {
+            print("🔍 Attempt #\(retryIndex + 1): Checking if partner completed Integration...")
             firestoreService.calculateResonanceMultiplier(sessionId: sessionId) { calculatedANIMA in
                 DispatchQueue.main.async {
                     if calculatedANIMA > 0 {
                         self.finalANIMA = calculatedANIMA
                         print("✨ Final ANIMA calculated with multiplier: \(calculatedANIMA)")
+                        
+                        // Cancel reminder notification since Integration is complete
+                        UNUserNotificationCenter.current().removePendingNotificationRequests(
+                            withIdentifiers: ["integration-reminder-\(self.sessionId)"]
+                        )
+                        
                         self.showingCompletion = true
-                    } else if retryCount < maxRetries {
-                        // Retry after a delay
-                        retryCount += 1
-                        print("⏳ Waiting for partner's reflection... (attempt \(retryCount)/\(maxRetries))")
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    } else if retryIndex < retryDelays.count {
+                        // Schedule next retry with exponential backoff
+                        let delay = retryDelays[retryIndex]
+                        retryIndex += 1
+                        
+                        let delayDescription = delay < 60 ? "\(Int(delay))s" : 
+                                              delay < 3600 ? "\(Int(delay/60))m" : 
+                                              "\(Int(delay/3600))h"
+                        print("⏳ Partner hasn't completed Integration yet. Checking again in \(delayDescription)... (attempt \(retryIndex)/\(retryDelays.count))")
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                             attemptCalculation()
                         }
                     } else {
-                        // Final fallback after all retries
-                        print("⚠️ Using fallback ANIMA calculation")
-                        self.finalANIMA = baseANIMA + courageBonus
+                        // After 23 hours, give up (Integration expires at 24h)
+                        print("⚠️ Integration expired - partner didn't complete in time")
+                        self.finalANIMA = 0  // No ANIMA if partner doesn't complete
                         self.showingCompletion = true
                     }
                 }
             }
         }
         
-        // Start first attempt after initial delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            attemptCalculation()
-        }
+        // Start first attempt
+        attemptCalculation()
     }
 }
 

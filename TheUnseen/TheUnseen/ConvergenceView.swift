@@ -454,8 +454,35 @@ struct ConvergenceView: View {
             UserDefaults.standard.set(jsonData, forKey: "pendingIntegration")
             print("💾 Saved pending Integration for session: \(sessionId)")
             print("💾 Artifact: \(sharedArtifact)")
+            
+            // Schedule reminder notification for 20 hours later (4 hours before expiration)
+            scheduleIntegrationReminder()
         } else {
             print("❌ Failed to save pending Integration - JSON serialization failed")
+        }
+    }
+    
+    private func scheduleIntegrationReminder() {
+        let content = UNMutableNotificationContent()
+        content.title = "Integration Expiring Soon"
+        content.body = "Your Integration expires in 4 hours. Both players must complete it to receive ANIMA."
+        content.sound = .default
+        
+        // Schedule for 20 hours from now (4 hours before 24h expiration)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 72000, repeats: false) // 20 hours
+        
+        let request = UNNotificationRequest(
+            identifier: "integration-reminder-\(sessionId)",
+            content: content,
+            trigger: trigger
+        )
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("❌ Failed to schedule reminder: \(error)")
+            } else {
+                print("⏰ Scheduled Integration reminder for 20 hours from now")
+            }
         }
     }
     
