@@ -156,18 +156,43 @@ This is a phased plan focused on iterative development, testing, and risk mitiga
 - [x] **Lead Engineer:** Implement the close-range "Digital Handshake" for meetup verification
 - [ ] **Behavioral Psychologist/Designer:** Design and implement the user flow for the Block/Report feature
 
-### Phase 3: Polish & Internal Alpha
+### Phase 3: Critical Improvements & Soul Integration
+
+#### Engineering Foundation
+- [ ] **Lead Engineer:** Build resilient session management layer with graceful reconnection handling
+- [ ] **DevOps/SRE:** Integrate lightweight, privacy-preserving logging framework (maintaining E2E encryption)
+- [ ] **QA Lead:** Implement anonymized diagnostic data collection and monitoring dashboard
+- [ ] **Lead Engineer:** Add proper state persistence across connection interruptions
+
+#### Game Design & Ritual Structure
+- [ ] **Game Designer:** Implement 3-act narrative structure for Level 1 digital prompts (Opening → Turn → Deepening)
+- [ ] **Game Designer/Engineer:** Build 3-act Convergence ritual (Arrival → Exchange → Closing)
+- [ ] **Creative Director:** Create somatic, projective, and field-reading in-person prompt categories
+- [ ] **Designer/Engineer:** Add turn-based exchange mechanic for Convergence (2 min each)
+
+#### Safety & Well-being
+- [ ] **Behavioral Psychologist/Designer:** Implement Block/Report feature (CRITICAL - before public release)
+- [ ] **Behavioral Psychologist:** Design "soft close" emotional safety feature with post-session check-in
+- [ ] **Content Designer:** Create guided grounding rituals (breathing exercises, body scans)
+
+#### Soul & Mythology Integration
+- [ ] **Creative Director/Designer:** Add ANIMA celebration animations (glowing effects, sacred sounds)
+- [ ] **Content Designer:** Frame all prompts with mythology voice ("The Mirror asks...")
+- [ ] **Designer:** Update UI microcopy with sacred language ("Speak what is true...")
+- [ ] **Sound Designer:** Create unique audio signature ("Tibetan bowl meets glitchy synth")
+
+### Phase 4: Polish & Internal Alpha
 - [ ] **Entire Team:** Dogfooding. We become the first Initiates. Daily mandatory sessions
 - [ ] **Designer/Engineer:** Refine all UI/UX elements, animations, and transitions based on feedback
 - [ ] **Game Designer:** Fine-tune the ANIMA point values for session completion and resonance bonuses to ensure the reward loop feels meaningful
 - [ ] **QA Lead:** Conduct extensive testing on battery life, connection stability, and edge cases (e.g., connection loss mid-session, one user going into airplane mode)
-- [ ] **DevOps/SRE:** Implement observability tools (Firebase Crashlytics, custom logging) to monitor performance and errors during our Alpha
+- [ ] **DevOps/SRE:** Verify observability tools are capturing needed metrics without compromising privacy
 
-### Phase 4: App Store Submission & Launch Prep
+### Phase 5: App Store Submission & Launch Prep
 - [ ] **Product Manager:** Set up the App Store Connect profile, including all required legal and banking information
 - [ ] **Brand Strategist/Creative Director:** Write all App Store copy, prepare screenshots, and create the preview video. The language must be compelling and hint at the deeper experience without revealing the Trojan Horse
 - [ ] **Legal Expert:** Final review of the Terms of Service and Privacy Policy, ensuring the language around "points" is airtight
 - [ ] **Lead Engineer:** Prepare and submit the final build to the App Store for review
 - [ ] **Product Manager/Brand Strategist:** Finalize the launch plan and partnerships for our first hyper-dense location (e.g., SXSW Interactive)
 
-By the end of this 18-week (approx. 4.5 months) cycle, we will have a high-quality, secure, and deeply tested MVP ready for our "Crawl" phase launch. This aggressive but realistic timeline prioritizes solving the right problems in the right order.
+By the end of this extended development cycle, we will have not just a functional MVP, but a truly magical experience that delivers on our promise of creating a "dojo for the soul." The additional Phase 3 ensures we address critical stability, safety, and soul requirements identified during initial alpha testing, before any public launch.
