@@ -2,6 +2,7 @@ import SwiftUI
 
 struct EnhancedChatView: View {
     @EnvironmentObject var p2pService: P2PConnectivityService
+    @EnvironmentObject var authService: AuthService
     @StateObject private var promptsService = PromptsService.shared
     @State private var messageText: String = ""
     @State private var displayedMessages: [ChatMessage] = []
@@ -11,6 +12,8 @@ struct EnhancedChatView: View {
     @State private var hasRespondedToCurrentPrompt = false
     @State private var peerHasRespondedToCurrentPrompt = false
     @State private var showDeveloperMenu = false
+    @State private var showingBlockReport = false
+    @State private var partnerFirebaseUID: String? = nil
     
     var body: some View {
         VStack(spacing: 0) {
@@ -104,6 +107,20 @@ struct EnhancedChatView: View {
         .navigationTitle("The Container")
         .preferredColorScheme(.light) // Force light mode for Level 1
         .toolbar {
+            // Safety shield (production mode only)
+            ToolbarItem(placement: .navigationBarLeading) {
+                if !DeveloperSettings.shared.isDeveloperModeEnabled {
+                    Button(action: {
+                        showingBlockReport = true
+                    }) {
+                        Image(systemName: "shield")
+                            .foregroundColor(.red.opacity(0.7))
+                            .font(.caption)
+                    }
+                }
+            }
+            
+            // Developer tools
             ToolbarItem(placement: .navigationBarTrailing) {
                 if DeveloperSettings.shared.isDeveloperModeEnabled {
                     Button(action: {
@@ -119,6 +136,22 @@ struct EnhancedChatView: View {
         .sheet(isPresented: $showDeveloperMenu) {
             DeveloperMenuView()
         }
+        .sheet(isPresented: $showingBlockReport) {
+            if let uid = partnerFirebaseUID {
+                BlockReportView(
+                    partnerName: p2pService.connectedPeer?.displayName,
+                    partnerUID: uid,
+                    sessionId: nil, // We don't have sessionId in chat
+                    onBlock: { wasReported in
+                        // Disconnect and return to main screen
+                        p2pService.session.disconnect()
+                    }
+                )
+            } else {
+                Text("Unable to load safety options. Partner ID not available.")
+                    .padding()
+            }
+        }
         .onAppear {
             showFirstPrompt()
         }
@@ -126,6 +159,7 @@ struct EnhancedChatView: View {
             if isComplete && !promptShown {
                 // Try again if handshake completes after view appears
                 showFirstPrompt()
+                exchangeFirebaseUIDs()
             }
         }
         .onReceive(promptsService.$currentPrompt) { prompt in
@@ -143,8 +177,18 @@ struct EnhancedChatView: View {
         .onReceive(p2pService.$messages) { newMessages in
             // Update displayed messages from service
             if let lastMessage = newMessages.last {
+                // Handle Firebase UID exchange for safety features
+                if lastMessage.text.contains("FIREBASE_UID:") {
+                    let uid = lastMessage.text
+                        .replacingOccurrences(of: "[SYSTEM]FIREBASE_UID:", with: "")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    DispatchQueue.main.async {
+                        self.partnerFirebaseUID = uid
+                        print("📱 Received partner's Firebase UID for safety features")
+                    }
+                }
                 // Skip system messages (they start with [SYSTEM])
-                if !lastMessage.text.hasPrefix("[SYSTEM]") && !displayedMessages.contains(where: { $0.id == lastMessage.id }) {
+                else if !lastMessage.text.hasPrefix("[SYSTEM]") && !displayedMessages.contains(where: { $0.id == lastMessage.id }) {
                     let displayMessage = ChatMessage(text: "Initiate: \(lastMessage.text)")
                     displayedMessages.append(displayMessage)
                     
@@ -203,6 +247,13 @@ struct EnhancedChatView: View {
             hasRespondedToCurrentPrompt = false
             peerHasRespondedToCurrentPrompt = false
         }
+    }
+    
+    private func exchangeFirebaseUIDs() {
+        // Send our Firebase UID to partner for block/report functionality
+        guard let userId = authService.user?.uid else { return }
+        p2pService.sendSystemMessage("FIREBASE_UID:\(userId)")
+        print("📤 Sent Firebase UID to partner for safety features")
     }
     
     private func showFirstPrompt() {

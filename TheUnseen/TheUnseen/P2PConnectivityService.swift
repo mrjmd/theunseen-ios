@@ -33,6 +33,10 @@ class P2PConnectivityService: NSObject, ObservableObject {
     private var reconnectionTimer: Timer?
     private let reconnectionDelay: TimeInterval = 5.0  // Increased to 5 seconds for stability
     
+    // Block list management
+    private var blockedFirebaseUIDs: Set<String> = []
+    private var peerToFirebaseUID: [MCPeerID: String] = [:]
+    
     // Meaningful Interaction requirements (per README)
     private var hasAwardedAnimaForSession = false
     private var minimumSessionDuration: TimeInterval {

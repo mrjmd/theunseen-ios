@@ -6,6 +6,20 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
+    // Reports collection - write-once by authenticated users
+    match /reports/{reportId} {
+      // Only authenticated users can create reports
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.reporterUID &&
+        request.resource.data.keys().hasAll(['reporterUID', 'reportedUID', 'reason', 'timestamp']);
+      
+      // Reports cannot be read by regular users (only admin/Shadow Council)
+      allow read: if false;
+      
+      // Reports cannot be updated or deleted by regular users
+      allow update, delete: if false;
+    }
+    
     // Sessions collection for Integration reflections
     match /sessions/{sessionId} {
       // Only allow read if user is one of the participants

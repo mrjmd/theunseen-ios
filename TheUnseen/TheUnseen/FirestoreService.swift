@@ -77,6 +77,70 @@ class FirestoreService: ObservableObject {
             }
     }
     
+    // MARK: - Block/Report Safety Features
+    
+    func blockUser(_ blockedUID: String, reason: String? = nil, context: String? = nil, sessionId: String? = nil) {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        
+        // Add to user's blocked list
+        db.collection("users").document(userId).updateData([
+            "blockedUsers": FieldValue.arrayUnion([blockedUID])
+        ]) { error in
+            if let error = error {
+                print("❌ Error blocking user: \(error)")
+            } else {
+                print("✅ User blocked: \(blockedUID)")
+            }
+        }
+        
+        // If there's a reason, create a report
+        if let reason = reason {
+            createReport(
+                reporterUID: userId,
+                reportedUID: blockedUID,
+                reason: reason,
+                context: context,
+                sessionId: sessionId
+            )
+        }
+    }
+    
+    private func createReport(reporterUID: String, reportedUID: String, reason: String, context: String?, sessionId: String?) {
+        let reportData: [String: Any] = [
+            "reporterUID": reporterUID,
+            "reportedUID": reportedUID,
+            "reason": reason,
+            "context": context ?? "",
+            "sessionId": sessionId ?? "",
+            "timestamp": FieldValue.serverTimestamp(),
+            "status": "pending" // For Shadow Council review
+        ]
+        
+        db.collection("reports").addDocument(data: reportData) { error in
+            if let error = error {
+                print("❌ Error creating report: \(error)")
+            } else {
+                print("✅ Report submitted for review")
+            }
+        }
+    }
+    
+    func getBlockedUsers(completion: @escaping ([String]) -> Void) {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            completion([])
+            return
+        }
+        
+        db.collection("users").document(userId).getDocument { document, error in
+            if let document = document, document.exists,
+               let blockedUsers = document.data()?["blockedUsers"] as? [String] {
+                completion(blockedUsers)
+            } else {
+                completion([])
+            }
+        }
+    }
+    
     // Save reflection and scores for The Integration
     func saveReflection(sessionId: String, reflection: String, promptIndex: Int, 
                        presenceScore: Int, courageScore: Int, mirrorScore: Int, partnerId: String? = nil) {
