@@ -1,6 +1,8 @@
 import SwiftUI
 import FirebaseCore
 import FirebaseAuth
+import FirebaseCrashlytics
+import FirebasePerformance
 import UserNotifications
 
 // By using an AppDelegate, we guarantee that Firebase is configured
@@ -10,6 +12,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
     print("Application is launching. Configuring Firebase...")
     FirebaseApp.configure()
+    
+    // Configure Crashlytics settings
+    configureCrashlytics()
+    
+    // Configure Performance Monitoring
+    configurePerformanceMonitoring()
     
     // Set notification delegate to handle foreground notifications
     UNUserNotificationCenter.current().delegate = self
@@ -44,6 +52,32 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
           NotificationCenter.default.post(name: NSNotification.Name("OpenPendingIntegration"), object: nil)
       }
       completionHandler()
+  }
+  
+  private func configureCrashlytics() {
+      // Set anonymous user properties for better crash segmentation
+      Crashlytics.crashlytics().setCustomValue(DeveloperSettings.shared.isDeveloperModeEnabled, forKey: "developer_mode")
+      Crashlytics.crashlytics().setCustomValue(UIDevice.current.systemVersion, forKey: "ios_version")
+      Crashlytics.crashlytics().setCustomValue(UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone", forKey: "device_type")
+      
+      // Log app launch
+      Crashlytics.crashlytics().log("App launched successfully")
+      
+      print("✅ Crashlytics configured with privacy-preserving settings")
+  }
+  
+  private func configurePerformanceMonitoring() {
+      // Performance Monitoring is automatically started
+      // We can disable it in debug builds if needed
+      #if DEBUG
+      Performance.sharedInstance().isInstrumentationEnabled = false
+      Performance.sharedInstance().isDataCollectionEnabled = false
+      print("⚠️ Performance Monitoring disabled in DEBUG builds")
+      #else
+      Performance.sharedInstance().isInstrumentationEnabled = true
+      Performance.sharedInstance().isDataCollectionEnabled = true
+      print("✅ Performance Monitoring enabled")
+      #endif
   }
 }
 

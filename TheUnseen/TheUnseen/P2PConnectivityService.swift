@@ -1,5 +1,7 @@
 import Foundation
 import MultipeerConnectivity
+import FirebaseCrashlytics
+import FirebasePerformance
 
 class P2PConnectivityService: NSObject, ObservableObject {
 
@@ -36,6 +38,10 @@ class P2PConnectivityService: NSObject, ObservableObject {
     // Block list management
     private var blockedFirebaseUIDs: Set<String> = []
     private var peerToFirebaseUID: [MCPeerID: String] = [:]
+    
+    // Performance tracking
+    private var handshakeTrace: Trace?
+    private var messageEncryptionTrace: Trace?
     
     // Meaningful Interaction requirements (per README)
     private var hasAwardedAnimaForSession = false
@@ -161,6 +167,13 @@ class P2PConnectivityService: NSObject, ObservableObject {
         let role: NoiseService.HandshakeRole = isInitiator ? .initiator : .responder
         print("I am the \(role).")
         
+        // Start performance trace for handshake
+        handshakeTrace = Performance.startTrace(name: "p2p_handshake")
+        handshakeTrace?.setValue(role == .initiator ? "initiator" : "responder", forAttribute: "role")
+        
+        // Log to Crashlytics for debugging
+        Crashlytics.crashlytics().log("Starting P2P handshake as \(role)")
+        
         let noiseService = NoiseService(role: role)
         noiseServices[peerID] = noiseService
         
@@ -276,6 +289,13 @@ class P2PConnectivityService: NSObject, ObservableObject {
             }
             
             if handshakeDidComplete {
+                // Stop performance trace
+                handshakeTrace?.stop()
+                handshakeTrace = nil
+                
+                // Log success to Crashlytics
+                Crashlytics.crashlytics().log("P2P handshake completed successfully")
+                
                 DispatchQueue.main.async {
                     self.isHandshakeComplete = true
                     // Don't start timer yet - wait for journey to be established

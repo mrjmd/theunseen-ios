@@ -1,6 +1,8 @@
 import Foundation
 import FirebaseFirestore
 import FirebaseAuth
+import FirebaseCrashlytics
+import FirebasePerformance
 
 // Converted to an ObservableObject to fit the new architecture.
 class FirestoreService: ObservableObject {
@@ -146,6 +148,9 @@ class FirestoreService: ObservableObject {
                        presenceScore: Int, courageScore: Int, mirrorScore: Int, partnerId: String? = nil) {
         guard let userId = Auth.auth().currentUser?.uid else { return }
         
+        // Start performance trace
+        let trace = Performance.startTrace(name: "save_reflection")
+        
         // First ensure session exists with participants (for backward compatibility)
         let sessionRef = db.collection("sessions").document(sessionId)
         sessionRef.getDocument { document, error in
@@ -174,8 +179,10 @@ class FirestoreService: ObservableObject {
         db.collection("sessions").document(sessionId)
             .collection("reflections").document(userId)
             .setData(reflectionData) { error in
+                trace?.stop()
                 if let error = error {
                     print("❌ Error saving reflection: \(error)")
+                    Crashlytics.crashlytics().record(error: error)
                 } else {
                     print("✅ Reflection saved for session \(sessionId)")
                 }
@@ -189,12 +196,16 @@ class FirestoreService: ObservableObject {
             return 
         }
         
+        // Start performance trace
+        let trace = Performance.startTrace(name: "anima_calculation")
+        
         let sessionRef = db.collection("sessions").document(sessionId)
         
         // Get both users' reflections
         sessionRef.collection("reflections").getDocuments { snapshot, error in
             guard let documents = snapshot?.documents, documents.count == 2 else {
                 print("⏳ Waiting for both users to submit reflections")
+                trace?.stop()
                 completion(0)
                 return
             }
@@ -218,6 +229,7 @@ class FirestoreService: ObservableObject {
             }
             
             guard mirrorScores.count == 2, courageScores.count == 2 else {
+                trace?.stop()
                 completion(0)
                 return
             }
@@ -260,6 +272,7 @@ class FirestoreService: ObservableObject {
                 }
             }
             
+            trace?.stop()
             completion(finalANIMA)
         }
     }
