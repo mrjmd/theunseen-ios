@@ -334,6 +334,10 @@ struct ConvergenceView: View {
                 p2pService.sendSystemMessage("ARTIFACT_CREATED:\(sharedArtifact)|SESSION:\(sessionId)")
                 waitingForArtifact = true
                 sessionComplete = true
+                
+                // Ensure session exists in Firestore with artifact
+                createSessionInFirestore()
+                
                 startIntegrationCooldown()
             })
         }
@@ -366,7 +370,7 @@ struct ConvergenceView: View {
                     }
                 }
                 // Handle artifact creation
-                else if lastMessage.text.contains("ARTIFACT_CREATED:") {
+                if lastMessage.text.contains("ARTIFACT_CREATED:") {
                     let fullMessage = lastMessage.text
                         .replacingOccurrences(of: "[SYSTEM]ARTIFACT_CREATED:", with: "")
                     
@@ -457,13 +461,17 @@ struct ConvergenceView: View {
     }
     
     private func savePendingIntegration() {
+        // Ensure session exists with both participants before saving pending Integration
+        createSessionInFirestore()
+        
         // Create pending integration data with timestamp as TimeInterval
         let pendingIntegration = [
             "sessionId": sessionId,
             "artifact": sharedArtifact,
             "timestamp": Date().timeIntervalSince1970,  // Convert Date to TimeInterval for JSON
             "partnerName": p2pService.connectedPeer?.displayName as Any,
-            "peerId": p2pService.connectedPeer?.displayName as Any  // Store peer ID for cooldown management
+            "peerId": p2pService.connectedPeer?.displayName as Any,  // Store peer ID for cooldown management
+            "partnerFirebaseUID": partnerFirebaseUID as Any  // Store Firebase UID for Integration
         ] as [String : Any]
         
         // Convert to JSON and save to UserDefaults
@@ -517,11 +525,14 @@ struct ConvergenceView: View {
         var participantIds = [userId]
         if let partnerUID = partnerFirebaseUID {
             participantIds.append(partnerUID)
+        } else {
+            print("⚠️ Warning: Creating session without partner UID - will need to update later")
         }
         
         print("🔐 Creating secure session with participants: \(participantIds)")
+        print("📝 Session ID: \(sessionId)")
         let firestoreService = FirestoreService()
-        firestoreService.createSession(sessionId: sessionId, participantIds: participantIds)
+        firestoreService.createSession(sessionId: sessionId, participantIds: participantIds, artifact: sharedArtifact.isEmpty ? nil : sharedArtifact)
     }
     
     private func disconnectAndReturn() {

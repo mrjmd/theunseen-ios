@@ -8,6 +8,7 @@ struct IntegrationView: View {
     let sessionId: String
     var sharedArtifact: String? = nil
     var peerId: String? = nil  // Optional peer ID for cooldown management
+    var partnerFirebaseUID: String? = nil  // Partner's Firebase UID for session recovery
     var onComplete: (() -> Void)? = nil
     
     // The three sliders
@@ -145,7 +146,7 @@ struct IntegrationView: View {
                                 title: "Courage",
                                 subtitle: "How much courage did you bring to the interaction?",
                                 value: $courageScore,
-                                symbolName: "lion",
+                                symbolName: "flame.fill",
                                 color: .red
                             )
                             
@@ -238,6 +239,17 @@ struct IntegrationView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .preferredColorScheme(.light) // Keep Level 1 in light mode
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if hasSubmitted && !showingCompletion {
+                        Button("Exit") {
+                            // Allow exit if stuck waiting
+                            dismiss()
+                        }
+                        .foregroundColor(.red)
+                    }
+                }
+            }
         }
         .onReceive(p2pService.$messages) { messages in
             // Listen for peer's resonance scores (only relevant during active P2P session)
@@ -261,6 +273,9 @@ struct IntegrationView: View {
             if p2pService.connectedPeer == nil && !hasSubmitted {
                 print("🔍 Opening Integration from pending state, will check partner status after submission")
             }
+            
+            // Ensure session exists with participants for security rules
+            ensureSessionExists()
         }
     }
     
@@ -297,6 +312,25 @@ struct IntegrationView: View {
         if !checkingMultiplier {
             checkingMultiplier = true
             checkForFinalMultiplier()
+        }
+    }
+    
+    private func ensureSessionExists() {
+        // For old sessions without partner UID, we need to find it from the session document
+        // or allow both users to add themselves as participants
+        guard let userId = AuthService().user?.uid else { return }
+        
+        let firestoreService = FirestoreService()
+        
+        // If we have partner UID, create with both participants
+        if let partnerUID = partnerFirebaseUID {
+            print("🔐 Ensuring session exists with both participants: [\(userId), \(partnerUID)]")
+            firestoreService.createSession(sessionId: sessionId, participantIds: [userId, partnerUID], artifact: sharedArtifact)
+        } else {
+            // Old session - try to add ourselves to existing session or create with just us
+            // The other user will do the same, building up the participants array
+            print("🔐 Adding self to session participants: \(userId)")
+            firestoreService.addSelfToSession(sessionId: sessionId, userId: userId, artifact: sharedArtifact)
         }
     }
     

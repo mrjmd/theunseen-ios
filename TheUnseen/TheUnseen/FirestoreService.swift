@@ -58,25 +58,158 @@ class FirestoreService: ObservableObject {
         }
     }
     
-    // Create a session document with participant IDs for security
-    func createSession(sessionId: String, participantIds: [String], artifact: String? = nil) {
-        let sessionData: [String: Any] = [
-            "sessionId": sessionId,
-            "participants": participantIds,
-            "artifact": artifact ?? "",
-            "createdAt": FieldValue.serverTimestamp(),
-            "status": "active"
-        ]
+    // Add current user to session participants (for migration of old sessions)
+    func addSelfToSession(sessionId: String, userId: String, artifact: String? = nil) {
+        let sessionRef = db.collection("sessions").document(sessionId)
         
-        db.collection("sessions")
-            .document(sessionId)
-            .setData(sessionData) { error in
-                if let error = error {
-                    print("❌ Error creating session: \(error)")
+        // For migration: Try to read first, if that fails try to create
+        sessionRef.getDocument { document, error in
+            if let error = error {
+                // Can't read - might not exist or no permissions
+                // Try to create it with ourselves
+                let sessionData: [String: Any] = [
+                    "sessionId": sessionId,
+                    "participants": [userId],
+                    "artifact": artifact ?? "",
+                    "createdAt": FieldValue.serverTimestamp(),
+                    "status": "active"
+                ]
+                
+                sessionRef.setData(sessionData, merge: false) { error in
+                    if let error = error {
+                        print("❌ Error creating session: \(error)")
+                        // If creation fails, try to update by adding ourselves
+                        sessionRef.updateData([
+                            "participants": FieldValue.arrayUnion([userId])
+                        ]) { updateError in
+                            if let updateError = updateError {
+                                print("❌ Error adding self to session: \(updateError)")
+                            } else {
+                                print("✅ Added self to existing session: \(sessionId)")
+                            }
+                        }
+                    } else {
+                        print("✅ Created session with self as participant: \(sessionId)")
+                    }
+                }
+            } else if let document = document, document.exists {
+                // Session exists and we can read it
+                if let existingParticipants = document.data()?["participants"] as? [String] {
+                    if !existingParticipants.contains(userId) {
+                        // Add ourselves to existing participants
+                        sessionRef.updateData([
+                            "participants": FieldValue.arrayUnion([userId])
+                        ]) { error in
+                            if let error = error {
+                                print("❌ Error adding self to session: \(error)")
+                            } else {
+                                print("✅ Added self to session participants: \(sessionId)")
+                            }
+                        }
+                    } else {
+                        print("✅ Already in session participants: \(sessionId)")
+                    }
                 } else {
-                    print("✅ Session created: \(sessionId) with participants: \(participantIds)")
+                    // No participants field - add it with just us
+                    sessionRef.updateData([
+                        "participants": [userId]
+                    ]) { error in
+                        if let error = error {
+                            print("❌ Error setting participants: \(error)")
+                        } else {
+                            print("✅ Set session participants with self: \(sessionId)")
+                        }
+                    }
+                }
+                
+                // Update artifact if provided and missing
+                if let artifact = artifact, !artifact.isEmpty,
+                   (document.data()?["artifact"] as? String ?? "").isEmpty {
+                    sessionRef.updateData(["artifact": artifact]) { _ in }
+                }
+            } else {
+                // Document doesn't exist - create it
+                let sessionData: [String: Any] = [
+                    "sessionId": sessionId,
+                    "participants": [userId],
+                    "artifact": artifact ?? "",
+                    "createdAt": FieldValue.serverTimestamp(),
+                    "status": "active"
+                ]
+                
+                sessionRef.setData(sessionData) { error in
+                    if let error = error {
+                        print("❌ Error creating session: \(error)")
+                    } else {
+                        print("✅ Created session with self as participant: \(sessionId)")
+                    }
                 }
             }
+        }
+    }
+    
+    // Create a session document with participant IDs for security
+    func createSession(sessionId: String, participantIds: [String], artifact: String? = nil) {
+        let sessionRef = db.collection("sessions").document(sessionId)
+        
+        // First check if session exists
+        sessionRef.getDocument { document, error in
+            if let document = document, document.exists {
+                // Session exists - update participants if needed
+                var updates: [String: Any] = [:]
+                
+                // Check if participants field exists and has all required UIDs
+                if let existingParticipants = document.data()?["participants"] as? [String] {
+                    let missingParticipants = participantIds.filter { !existingParticipants.contains($0) }
+                    if !missingParticipants.isEmpty {
+                        // Merge participants
+                        let mergedParticipants = Array(Set(existingParticipants + participantIds))
+                        updates["participants"] = mergedParticipants
+                        print("🔄 Updating session participants: \(mergedParticipants)")
+                    }
+                } else {
+                    // No participants field - add it
+                    updates["participants"] = participantIds
+                    print("🔄 Adding participants to existing session: \(participantIds)")
+                }
+                
+                // Update artifact if provided and not already set
+                if let artifact = artifact, !artifact.isEmpty,
+                   (document.data()?["artifact"] as? String ?? "").isEmpty {
+                    updates["artifact"] = artifact
+                }
+                
+                // Apply updates if needed
+                if !updates.isEmpty {
+                    sessionRef.updateData(updates) { error in
+                        if let error = error {
+                            print("❌ Error updating session: \(error)")
+                        } else {
+                            print("✅ Session updated: \(sessionId)")
+                        }
+                    }
+                } else {
+                    print("✅ Session already exists with correct participants: \(sessionId)")
+                }
+            } else {
+                // Session doesn't exist - create it
+                let sessionData: [String: Any] = [
+                    "sessionId": sessionId,
+                    "participants": participantIds,
+                    "artifact": artifact ?? "",
+                    "createdAt": FieldValue.serverTimestamp(),
+                    "status": "active"
+                ]
+                
+                sessionRef.setData(sessionData) { error in
+                    if let error = error {
+                        print("❌ Error creating session: \(error)")
+                    } else {
+                        print("✅ Session created: \(sessionId) with participants: \(participantIds)")
+                    }
+                }
+            }
+        }
     }
     
     // MARK: - Block/Report Safety Features
@@ -151,16 +284,24 @@ class FirestoreService: ObservableObject {
         // Start performance trace
         let trace = Performance.startTrace(name: "save_reflection")
         
-        // First ensure session exists with participants (for backward compatibility)
+        // First ensure user is in session participants (for migration)
         let sessionRef = db.collection("sessions").document(sessionId)
         sessionRef.getDocument { document, error in
             if let document = document, !document.exists {
-                // Create session if it doesn't exist (backward compatibility)
+                // Create session if it doesn't exist
                 var participants = [userId]
                 if let partnerId = partnerId {
                     participants.append(partnerId)
                 }
                 self.createSession(sessionId: sessionId, participantIds: participants)
+            } else if let document = document, document.exists {
+                // Add ourselves to participants if not already there
+                if let existingParticipants = document.data()?["participants"] as? [String],
+                   !existingParticipants.contains(userId) {
+                    sessionRef.updateData([
+                        "participants": FieldValue.arrayUnion([userId])
+                    ]) { _ in }
+                }
             }
         }
         

@@ -22,6 +22,7 @@ struct PathLaunchView: View {
         let timestamp: TimeInterval  // Store as TimeInterval, convert to Date when needed
         let partnerName: String?
         let peerId: String?  // Peer ID for cooldown management
+        let partnerFirebaseUID: String?  // Partner's Firebase UID for session recovery
         
         var date: Date {
             return Date(timeIntervalSince1970: timestamp)
@@ -106,7 +107,7 @@ struct PathLaunchView: View {
                                         .stroke(Color.black.opacity(0.1), lineWidth: 1)
                                 )
                         }
-                        .disabled(isSearching || hasPendingIntegration)
+                        .disabled(isSearching)
                         .scaleEffect(isSearching ? 0.95 : 1.0)
                         .animation(.easeInOut(duration: 0.2), value: isSearching)
                         
@@ -203,6 +204,7 @@ struct PathLaunchView: View {
                             sessionId: data.sessionId,
                             sharedArtifact: data.artifact,
                             peerId: data.peerId,
+                            partnerFirebaseUID: data.partnerFirebaseUID,
                             onComplete: {
                                 // Clear pending integration
                                 UserDefaults.standard.removeObject(forKey: "pendingIntegration")
@@ -337,12 +339,14 @@ struct PathLaunchView: View {
                     if hoursSince < 24 {
                         let partnerName = json["partnerName"] as? String
                         let peerId = json["peerId"] as? String
+                        let partnerFirebaseUID = json["partnerFirebaseUID"] as? String
                         pendingIntegrationData = PendingIntegration(
                             sessionId: sessionId,
                             artifact: artifact,
                             timestamp: timestamp,
                             partnerName: partnerName,
-                            peerId: peerId
+                            peerId: peerId,
+                            partnerFirebaseUID: partnerFirebaseUID
                         )
                         hasPendingIntegration = true
                         print("📱 ✅ Loaded pending Integration: \(sessionId), artifact: \(artifact)")
