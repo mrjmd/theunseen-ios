@@ -18,7 +18,6 @@ struct IntegrationView: View {
     
     // The private reflection
     @State private var reflection: String = ""
-    @State private var selectedPrompt = 0
     
     // UI states
     @State private var hasSubmitted = false
@@ -33,6 +32,14 @@ struct IntegrationView: View {
         "What part of you were you most afraid to show? What happened when you did?",
         "Describe a moment in the interaction where you felt most alive."
     ]
+    
+    // Deterministic prompt selection based on session ID
+    var selectedPrompt: Int {
+        // Use session ID to deterministically select a prompt
+        // This ensures both users see the same prompt
+        let hash = sessionId.hashValue
+        return abs(hash) % reflectionPrompts.count
+    }
     
     var body: some View {
         NavigationStack {
@@ -99,19 +106,28 @@ struct IntegrationView: View {
                                 .foregroundColor(.purple)
                                 .tracking(1)
                             
-                            // Prompt selector
-                            Picker("Prompt", selection: $selectedPrompt) {
-                                ForEach(0..<reflectionPrompts.count, id: \.self) { index in
-                                    Text(reflectionPrompts[index])
-                                        .tag(index)
-                                }
+                            // Display the deterministic prompt for this session
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Today's Reflection")
+                                    .font(.caption2)
+                                    .foregroundColor(.purple)
+                                    .tracking(1)
+                                
+                                Text(reflectionPrompts[selectedPrompt])
+                                    .font(.body)
+                                    .foregroundColor(.primary)
+                                    .italic()
+                                    .padding()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color.purple.opacity(0.05))
+                                    )
                             }
-                            .pickerStyle(.menu)
-                            .tint(.purple)
                             
                             // Reflection text area
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(reflectionPrompts[selectedPrompt])
+                                Text("Your Response")
                                     .font(.caption2)
                                     .foregroundColor(.gray)
                                     .italic()
@@ -446,7 +462,7 @@ struct SliderSection: View {
                                 endPoint: .trailing
                             )
                         )
-                        .frame(width: CGFloat(value) / 100.0 * geometry.size.width, height: 8)
+                        .frame(width: max(0, min(geometry.size.width, CGFloat(value) / 100.0 * geometry.size.width)), height: 8)
                         .animation(.interactiveSpring(), value: value)
                 }
                 .frame(height: 8)
