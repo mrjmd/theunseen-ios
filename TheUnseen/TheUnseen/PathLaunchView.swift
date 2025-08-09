@@ -226,6 +226,9 @@ struct PathLaunchView: View {
             loadAnimaBalance()
             checkPendingIntegration()
             
+            // Reload block list in case it changed
+            p2pService.loadBlockedUsers()
+            
             // Start periodic check for pending Integration (less frequent)
             checkTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
                 checkPendingIntegration()

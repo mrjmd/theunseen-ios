@@ -71,6 +71,9 @@ class P2PConnectivityService: NSObject, ObservableObject {
         super.init()
         // Never auto-start discovery - user must click "Begin The Path"
         // This ensures users have control over when they start seeking connections
+        
+        // Load blocked users list on initialization
+        loadBlockedUsers()
     }
     
     deinit {
@@ -90,7 +93,13 @@ class P2PConnectivityService: NSObject, ObservableObject {
         print("Starting discovery...")
         isDiscoveryActive = true
         
-        self.serviceAdvertiser = MCNearbyServiceAdvertiser(peer: myPeerID, discoveryInfo: nil, serviceType: serviceType)
+        // Include Firebase UID in discovery info for pre-connection blocking
+        var discoveryInfo: [String: String]? = nil
+        if let userId = AuthService().user?.uid {
+            discoveryInfo = ["uid": userId]
+        }
+        
+        self.serviceAdvertiser = MCNearbyServiceAdvertiser(peer: myPeerID, discoveryInfo: discoveryInfo, serviceType: serviceType)
         self.serviceAdvertiser.delegate = self
         self.serviceAdvertiser.startAdvertisingPeer()
 
@@ -309,6 +318,25 @@ class P2PConnectivityService: NSObject, ObservableObject {
 
 extension P2PConnectivityService: MCNearbyServiceAdvertiserDelegate {
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
+        // Extract Firebase UID from context if available
+        var peerUID: String? = nil
+        if let context = context {
+            do {
+                if let info = try JSONSerialization.jsonObject(with: context) as? [String: String] {
+                    peerUID = info["uid"]
+                }
+            } catch {
+                print("Failed to parse invitation context")
+            }
+        }
+        
+        // Check if this user is blocked
+        if let uid = peerUID, blockedFirebaseUIDs.contains(uid) {
+            print("🛡️ Declining invitation from blocked user: \(peerID.displayName)")
+            invitationHandler(false, nil)
+            return
+        }
+        
         // Check if we recently had a session with this peer
         if let lastSessionDate = UserDefaults.standard.object(forKey: "lastSession_\(peerID.displayName)") as? Date {
             let secondsSinceLastSession = Date().timeIntervalSince(lastSessionDate)
@@ -322,6 +350,11 @@ extension P2PConnectivityService: MCNearbyServiceAdvertiserDelegate {
         
         // Only accept if we're not already connected
         if session.connectedPeers.isEmpty && !connectionAttempts.contains(peerID) {
+            // Store the peer's Firebase UID for later use
+            if let uid = peerUID {
+                peerToFirebaseUID[peerID] = uid
+            }
+            
             print("Accepting invitation from: \(peerID.displayName)")
             connectionAttempts.insert(peerID)
             invitationHandler(true, self.session)
@@ -334,6 +367,12 @@ extension P2PConnectivityService: MCNearbyServiceAdvertiserDelegate {
 
 extension P2PConnectivityService: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String : String]?) {
+        // Check if this user is blocked based on their Firebase UID
+        if let uid = info?["uid"], blockedFirebaseUIDs.contains(uid) {
+            print("🛡️ Skipping blocked user: \(peerID.displayName)")
+            return
+        }
+        
         // Check if we recently had a session with this peer
         if let lastSessionDate = UserDefaults.standard.object(forKey: "lastSession_\(peerID.displayName)") as? Date {
             let secondsSinceLastSession = Date().timeIntervalSince(lastSessionDate)
@@ -355,8 +394,20 @@ extension P2PConnectivityService: MCNearbyServiceBrowserDelegate {
         
         // Only invite if we're not already connected and we're the "initiator" (lower ID)
         if !isConnectedOrHasPeers && myPeerID.displayName < peerID.displayName {
+            // Store the peer's Firebase UID for later use
+            if let uid = info?["uid"] {
+                peerToFirebaseUID[peerID] = uid
+            }
+            
+            // Include our Firebase UID in the invitation context
+            var contextData: Data? = nil
+            if let myUID = AuthService().user?.uid {
+                let contextInfo = ["uid": myUID]
+                contextData = try? JSONSerialization.data(withJSONObject: contextInfo)
+            }
+            
             print("Inviting peer: \(peerID.displayName)")
-            browser.invitePeer(peerID, to: self.session, withContext: nil, timeout: 10)
+            browser.invitePeer(peerID, to: self.session, withContext: contextData, timeout: 10)
         } else {
             // Remove from attempts if we're not inviting
             connectionAttempts.remove(peerID)
@@ -454,6 +505,16 @@ extension P2PConnectivityService: MCSessionDelegate {
     }
     
     // Check for meaningful interaction based on time and message count
+    func loadBlockedUsers() {
+        let firestoreService = FirestoreService()
+        firestoreService.getBlockedUsers { blockedUIDs in
+            DispatchQueue.main.async {
+                self.blockedFirebaseUIDs = Set(blockedUIDs)
+                print("🛡️ Loaded \(blockedUIDs.count) blocked users")
+            }
+        }
+    }
+    
     private func checkMeaningfulInteraction() {
         // Only log every 10 seconds or when messages change
         let shouldLog = Int(connectionDuration) % 10 == 0 || 
