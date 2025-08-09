@@ -3,6 +3,7 @@ import UserNotifications
 
 struct ConvergenceView: View {
     @EnvironmentObject var p2pService: P2PConnectivityService
+    @EnvironmentObject var authService: AuthService
     @Environment(\.dismiss) var dismiss
     @Environment(\.presentationMode) var presentationMode
     @StateObject private var promptsService = PromptsService.shared
@@ -18,6 +19,7 @@ struct ConvergenceView: View {
     @State private var integrationCooldownRemaining: Int = Int(DeveloperSettings.shared.integrationCooldown)
     @State private var cooldownTimer: Timer?
     @State private var integrationAvailable = false
+    @State private var partnerFirebaseUID: String? = nil
     
     var isInitiator: Bool {
         p2pService.myPeerID.displayName < (p2pService.connectedPeer?.displayName ?? "")
@@ -320,6 +322,7 @@ struct ConvergenceView: View {
         .onAppear {
             startTimer()
             promptsService.transitionToConvergence()
+            exchangeFirebaseUIDs()
         }
         .onDisappear {
             timer?.invalidate()
@@ -348,9 +351,22 @@ struct ConvergenceView: View {
                 }
         }
         .onReceive(p2pService.$messages) { messages in
-            // Listen for artifact creation from peer
+            // Listen for messages from peer
             if let lastMessage = messages.last {
-                if lastMessage.text.contains("ARTIFACT_CREATED:") {
+                // Handle Firebase UID exchange
+                if lastMessage.text.contains("FIREBASE_UID:") {
+                    let uid = lastMessage.text
+                        .replacingOccurrences(of: "[SYSTEM]FIREBASE_UID:", with: "")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    DispatchQueue.main.async {
+                        self.partnerFirebaseUID = uid
+                        print("📱 Received partner's Firebase UID: \(uid)")
+                        // Now create session with both UIDs
+                        self.createSessionInFirestore()
+                    }
+                }
+                // Handle artifact creation
+                else if lastMessage.text.contains("ARTIFACT_CREATED:") {
                     let fullMessage = lastMessage.text
                         .replacingOccurrences(of: "[SYSTEM]ARTIFACT_CREATED:", with: "")
                     
@@ -485,6 +501,27 @@ struct ConvergenceView: View {
                 print("⏰ Scheduled Integration reminder for 20 hours from now")
             }
         }
+    }
+    
+    private func exchangeFirebaseUIDs() {
+        // Send our Firebase UID to partner
+        guard let userId = authService.user?.uid else { return }
+        p2pService.sendSystemMessage("FIREBASE_UID:\(userId)")
+        print("📤 Sent Firebase UID to partner: \(userId)")
+    }
+    
+    private func createSessionInFirestore() {
+        // Create session document with both participant IDs for security
+        guard let userId = authService.user?.uid else { return }
+        
+        var participantIds = [userId]
+        if let partnerUID = partnerFirebaseUID {
+            participantIds.append(partnerUID)
+        }
+        
+        print("🔐 Creating secure session with participants: \(participantIds)")
+        let firestoreService = FirestoreService()
+        firestoreService.createSession(sessionId: sessionId, participantIds: participantIds)
     }
     
     private func disconnectAndReturn() {

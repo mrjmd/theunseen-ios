@@ -56,10 +56,44 @@ class FirestoreService: ObservableObject {
         }
     }
     
+    // Create a session document with participant IDs for security
+    func createSession(sessionId: String, participantIds: [String], artifact: String? = nil) {
+        let sessionData: [String: Any] = [
+            "sessionId": sessionId,
+            "participants": participantIds,
+            "artifact": artifact ?? "",
+            "createdAt": FieldValue.serverTimestamp(),
+            "status": "active"
+        ]
+        
+        db.collection("sessions")
+            .document(sessionId)
+            .setData(sessionData) { error in
+                if let error = error {
+                    print("❌ Error creating session: \(error)")
+                } else {
+                    print("✅ Session created: \(sessionId) with participants: \(participantIds)")
+                }
+            }
+    }
+    
     // Save reflection and scores for The Integration
     func saveReflection(sessionId: String, reflection: String, promptIndex: Int, 
-                       presenceScore: Int, courageScore: Int, mirrorScore: Int) {
+                       presenceScore: Int, courageScore: Int, mirrorScore: Int, partnerId: String? = nil) {
         guard let userId = Auth.auth().currentUser?.uid else { return }
+        
+        // First ensure session exists with participants (for backward compatibility)
+        let sessionRef = db.collection("sessions").document(sessionId)
+        sessionRef.getDocument { document, error in
+            if let document = document, !document.exists {
+                // Create session if it doesn't exist (backward compatibility)
+                var participants = [userId]
+                if let partnerId = partnerId {
+                    participants.append(partnerId)
+                }
+                self.createSession(sessionId: sessionId, participantIds: participants)
+            }
+        }
         
         let reflectionData: [String: Any] = [
             "userId": userId,

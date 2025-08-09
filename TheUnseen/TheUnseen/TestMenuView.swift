@@ -39,7 +39,9 @@ struct TestMenuView: View {
                     .cornerRadius(10)
                 }
                 .sheet(isPresented: $showP2PTests) {
-                    P2PTestView()
+                    // P2PTestView was removed during cleanup
+                    Text("P2P Test functionality has been removed")
+                        .padding()
                 }
                 
                 // Firebase Tests
