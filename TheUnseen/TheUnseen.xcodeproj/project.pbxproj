@@ -29,6 +29,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		C95A9F912E4846E900DDD018 /* Fonts */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Fonts;
+			sourceTree = "<group>";
+		};
 		C9FBED612E444EE6003D6AD2 /* TheUnseen */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -60,6 +65,7 @@
 			children = (
 				C9FBED612E444EE6003D6AD2 /* TheUnseen */,
 				C9FBED602E444EE6003D6AD2 /* Products */,
+				C95A9F912E4846E900DDD018 /* Fonts */,
 			);
 			sourceTree = "<group>";
 		};
@@ -87,6 +93,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
+				C95A9F912E4846E900DDD018 /* Fonts */,
 				C9FBED612E444EE6003D6AD2 /* TheUnseen */,
 			);
 			name = TheUnseen;

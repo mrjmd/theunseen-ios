@@ -40,17 +40,17 @@ struct PathLaunchView: View {
                     // ANIMA Balance Display
                     VStack(spacing: 8) {
                         Text("Your ANIMA")
-                            .font(.system(size: 14, weight: .light))
-                            .foregroundColor(.gray)
-                            .tracking(1)
+                            .font(DesignSystem.Typography.caption())
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .tracking(DesignSystem.Typography.trackingWide)
                         
                         HStack(alignment: .bottom, spacing: 4) {
                             Image(systemName: "sparkle")
                                 .font(.system(size: 24))
                                 .foregroundColor(.purple)
                             Text("\(animaBalance)")
-                                .font(.system(size: 36, weight: .light, design: .rounded))
-                                .foregroundColor(.primary)
+                                .font(DesignSystem.Typography.technical(36))
+                                .foregroundColor(DesignSystem.Colors.textPrimary)
                                 .contentTransition(.numericText())
                                 .animation(.spring(response: 0.5, dampingFraction: 0.8), value: animaBalance)
                         }

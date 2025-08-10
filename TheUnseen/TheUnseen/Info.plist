@@ -11,5 +11,16 @@
 	<string>The Unseen uses Face ID to secure your anonymous identity and protect your ANIMA balance.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>The Unseen uses your local network to verify proximity during The Convergence meetup.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>RobotoMono-Regular.ttf</string>
+		<string>RobotoMono-Light.ttf</string>
+		<string>RobotoMono-Medium.ttf</string>
+		<string>RobotoMono-Bold.ttf</string>
+		<string>Cinzel-Regular.ttf</string>
+		<string>Cinzel-Medium.ttf</string>
+		<string>Cinzel-SemiBold.ttf</string>
+		<string>Cinzel-Bold.ttf</string>
+	</array>
 </dict>
 </plist>

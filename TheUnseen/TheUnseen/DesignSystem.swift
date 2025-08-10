@@ -114,21 +114,35 @@ enum DesignSystem {
         static let trackingWide: CGFloat = 1
         static let trackingWider: CGFloat = 2
         
-        // Pre-configured Text Styles
+        // Pre-configured Text Styles with Custom Fonts
         static func title(_ size: CGFloat = titleMedium) -> Font {
-            Font.system(size: size, weight: .semibold, design: .default)
+            // Use Cinzel for titles (sacred/mystical feel)
+            FontManager.customFont(.cinzel, size: size, weight: .semibold)
         }
         
         static func body(_ size: CGFloat = bodyMedium) -> Font {
+            // Use system font for body text (readable, normie mode)
             Font.system(size: size, weight: .regular, design: .default)
         }
         
         static func caption(_ size: CGFloat = captionLarge) -> Font {
+            // Use system font for captions
             Font.system(size: size, weight: .light, design: .default)
         }
         
         static func sacred(_ size: CGFloat = bodyLarge) -> Font {
-            Font.system(size: size, weight: .medium, design: .serif)
+            // Use Cinzel for sacred/special text
+            FontManager.customFont(.cinzel, size: size, weight: .medium)
+        }
+        
+        static func technical(_ size: CGFloat = bodyMedium) -> Font {
+            // Use RobotoMono for technical elements (timers, codes)
+            FontManager.customFont(.robotoMono, size: size, weight: .regular)
+        }
+        
+        static func monospaced(_ size: CGFloat = bodyMedium) -> Font {
+            // Alias for technical font
+            FontManager.customFont(.robotoMono, size: size, weight: .regular)
         }
     }
     

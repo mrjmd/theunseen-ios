@@ -43,31 +43,26 @@ struct ConvergenceView: View {
                 // Header
                 VStack(spacing: 8) {
                     Text(Mythology.Titles.convergence)
-                        .font(.title2)
-                        .fontWeight(.light)
-                        .tracking(2)
+                        .font(DesignSystem.Typography.title())
+                        .tracking(DesignSystem.Typography.trackingWider)
                     
                     Text(Mythology.Titles.meetup)
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                        .tracking(1)
+                        .font(DesignSystem.Typography.caption())
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .tracking(DesignSystem.Typography.trackingWide)
                 }
                 .padding()
             
             // Timer
             ZStack {
                 Circle()
-                    .stroke(Color.gray.opacity(0.2), lineWidth: 4)
+                    .stroke(DesignSystem.Colors.textTertiary.opacity(0.2), lineWidth: 4)
                     .frame(width: 120, height: 120)
                 
                 Circle()
                     .trim(from: 0, to: Double(timeRemaining) / DeveloperSettings.shared.convergenceDuration)
                     .stroke(
-                        LinearGradient(
-                            colors: [.purple, .indigo],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
+                        DesignSystem.Colors.twilightGradient,
                         style: StrokeStyle(lineWidth: 4, lineCap: .round)
                     )
                     .frame(width: 120, height: 120)
@@ -76,10 +71,10 @@ struct ConvergenceView: View {
                 
                 VStack(spacing: 4) {
                     Text(formattedTime)
-                        .font(.system(size: 28, weight: .light, design: .monospaced))
+                        .font(DesignSystem.Typography.technical(28))
                     Text("remaining")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
+                        .font(DesignSystem.Typography.caption(DesignSystem.Typography.captionSmall))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
                 }
             }
             .padding(.vertical, 20)
@@ -88,9 +83,9 @@ struct ConvergenceView: View {
             if let prompt = promptsService.currentPrompt {
                 VStack(spacing: 16) {
                     Text("Your Sacred Task")
-                        .font(.caption)
-                        .foregroundColor(.purple)
-                        .tracking(1)
+                        .font(DesignSystem.Typography.caption())
+                        .foregroundColor(DesignSystem.Colors.accentPrimary)
+                        .tracking(DesignSystem.Typography.trackingWide)
                     
                     // Voice prefix
                     Text(prompt.voicePrefix)
