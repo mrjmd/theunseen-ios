@@ -135,7 +135,15 @@ struct ConvergenceButtonView: View {
         p2pService.sendSystemMessage("CONVERGENCE_ACCEPTED")
         // Navigate to meetup flow
         print("✅ Convergence accepted! Moving to meetup flow...")
-        navigateToMeetup = true
+        
+        // Sensory feedback for acceptance
+        HapticManager.shared.success()
+        SoundManager.shared.play(.convergenceBegin, volume: 0.5)
+        
+        // Navigate with smooth transition
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+            navigateToMeetup = true
+        }
     }
     
     private func declineConvergence() {
@@ -148,8 +156,15 @@ struct ConvergenceButtonView: View {
         // The other user accepted our request
         convergenceInitiated = false
         print("✅ Convergence accepted by peer! Moving to meetup flow...")
-        // Navigate to meetup flow
-        navigateToMeetup = true
+        
+        // Add smooth transition with haptic
+        HapticManager.shared.mediumImpact()
+        SoundManager.shared.play(.convergenceBegin, volume: 0.5)
+        
+        // Navigate to meetup flow with animation
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+            navigateToMeetup = true
+        }
     }
     
     private func handleConvergenceDeclined() {

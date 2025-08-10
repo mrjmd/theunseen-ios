@@ -275,11 +275,14 @@ struct PathLaunchView: View {
                 // Stop discovery once connected (save battery)
                 p2pService.stopDiscovery()
                 
-                // Transition to chat after a brief moment
+                // Transition to chat after a brief moment with sacred animation
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    withAnimation {
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                         showChat = true
                     }
+                    
+                    // Play transition sound
+                    SoundManager.shared.play(.transitionWhoosh, volume: 0.2)
                 }
             } else {
                 // Peer disconnected, reset the state
