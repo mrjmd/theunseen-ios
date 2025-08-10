@@ -95,12 +95,12 @@ struct ConvergenceView: View {
                     .animation(.linear(duration: 1), value: timeRemaining)
                     .shadow(color: DesignSystem.Colors.accentPrimary.opacity(0.3), radius: 4)
                 
-                // Pulse indicator at progress end
+                // Pulse indicator at progress end - follows the tip of the progress line
                 Circle()
                     .fill(DesignSystem.Colors.accentPrimary)
                     .frame(width: 12, height: 12)
-                    .offset(y: -60)
-                    .rotationEffect(.degrees(360 * (1 - Double(timeRemaining) / DeveloperSettings.shared.convergenceDuration) - 90))
+                    .offset(y: -60)  // Position on the circle radius
+                    .rotationEffect(.degrees(360 * Double(timeRemaining) / DeveloperSettings.shared.convergenceDuration - 90))
                     .animation(.linear(duration: 1), value: timeRemaining)
                     .shadow(color: DesignSystem.Colors.accentPrimary, radius: 4)
                 
