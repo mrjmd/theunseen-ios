@@ -242,6 +242,8 @@ struct SacredSpaceContainer: View {
 }
 
 // MARK: - Preview
+// Commented out to prevent build issues
+/*
 struct SacredSpaceVisualization_Previews: PreviewProvider {
     static var previews: some View {
         Group {
@@ -252,3 +254,4 @@ struct SacredSpaceVisualization_Previews: PreviewProvider {
         }
     }
 }
+*/

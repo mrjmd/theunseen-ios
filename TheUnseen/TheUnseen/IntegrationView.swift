@@ -37,6 +37,7 @@ struct IntegrationView: View {
     var selectedPrompt: Int {
         // Use session ID to deterministically select a prompt
         // This ensures both users see the same prompt
+        guard !reflectionPrompts.isEmpty else { return 0 }
         let hash = sessionId.hashValue
         return abs(hash) % reflectionPrompts.count
     }
@@ -377,6 +378,9 @@ struct IntegrationView: View {
                         self.finalANIMA = calculatedANIMA
                         print("✨ Final ANIMA calculated with multiplier: \(calculatedANIMA)")
                         
+                        // Haptic celebration for ANIMA award
+                        HapticManager.shared.animaAwarded()
+                        
                         // Cancel reminder notification since Integration is complete
                         UNUserNotificationCenter.current().removePendingNotificationRequests(
                             withIdentifiers: ["integration-reminder-\(self.sessionId)"]
@@ -508,7 +512,13 @@ struct CompletionView: View {
                 VStack(spacing: 12) {
                     Image(systemName: "seal.fill")
                         .font(.system(size: 60))
-                        .foregroundColor(.purple)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color(red: 0.9, green: 0.7, blue: 0.3), Color(red: 0.7, green: 0.7, blue: 0.8)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                         .scaleEffect(showingANIMA ? 1 : 0)
                         .animation(.spring(response: 0.6, dampingFraction: 0.6).delay(0.3), value: showingANIMA)
                     

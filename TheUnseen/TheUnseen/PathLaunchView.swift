@@ -51,6 +51,8 @@ struct PathLaunchView: View {
                             Text("\(animaBalance)")
                                 .font(.system(size: 36, weight: .light, design: .rounded))
                                 .foregroundColor(.primary)
+                                .contentTransition(.numericText())
+                                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: animaBalance)
                         }
                     }
                     .padding(.top, 40)
@@ -92,20 +94,28 @@ struct PathLaunchView: View {
                     VStack(spacing: 20) {
                         // The Path button
                         Button(action: beginPath) {
-                            Text("BEGIN THE PATH")
-                                .font(.system(size: 16, weight: .medium))
-                                .tracking(2)
-                                .foregroundColor(isSearching ? .gray : .white)
-                                .padding(.horizontal, 60)
-                                .padding(.vertical, 20)
-                                .background(
-                                    Capsule()
-                                        .fill(isSearching ? Color.gray.opacity(0.3) : Color.black)
-                                )
-                                .overlay(
-                                    Capsule()
-                                        .stroke(Color.black.opacity(0.1), lineWidth: 1)
-                                )
+                            HStack {
+                                if isSearching {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle())
+                                        .scaleEffect(0.5)
+                                        .tint(.purple)
+                                }
+                                Text(isSearching ? "SEEKING..." : "BEGIN THE PATH")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .tracking(2)
+                            }
+                            .foregroundColor(isSearching ? .gray : .white)
+                            .padding(.horizontal, 60)
+                            .padding(.vertical, 20)
+                            .background(
+                                Capsule()
+                                    .fill(isSearching ? Color.gray.opacity(0.3) : Color.black)
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                            )
                         }
                         .disabled(isSearching)
                         .scaleEffect(isSearching ? 0.95 : 1.0)
@@ -283,6 +293,7 @@ struct PathLaunchView: View {
     }
     
     private func beginPath() {
+        HapticManager.shared.pathBegun()
         // Check if there's a pending Integration before starting a new path
         if hasPendingIntegration {
             showingIntegrationWarning = true
