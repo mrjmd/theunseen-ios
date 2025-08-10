@@ -410,6 +410,11 @@ class FirestoreService: ObservableObject {
                     print("❌ Error awarding resonance ANIMA: \(error)")
                 } else {
                     print("✨ Awarded \(finalANIMA) ANIMA (base: \(baseANIMA), courage: \(courageBonus), multiplier: \(multiplier)x)")
+                    
+                    // Sensory celebration for ANIMA award
+                    DispatchQueue.main.async {
+                        SoundManager.shared.playAnimaCelebration(amount: finalANIMA)
+                    }
                 }
             }
             

@@ -442,10 +442,29 @@ struct ConvergenceView: View {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             if timeRemaining > 0 {
                 timeRemaining -= 1
+                
+                // Heartbeat haptics and warning when < 10 seconds
+                if timeRemaining == 10 {
+                    SoundManager.shared.startHeartbeat(volume: 0.3)
+                    SoundManager.shared.playCountdownWarning()
+                }
+                
+                // Pulse haptic for final countdown
+                if timeRemaining <= 10 && timeRemaining > 0 {
+                    HapticManager.shared.lightImpact()
+                }
+                
+                // Extra strong warning at 5 seconds
+                if timeRemaining == 5 {
+                    HapticManager.shared.warning()
+                }
             } else {
                 timer?.invalidate()
-                // Play a gentle completion sound or haptic
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                
+                // Stop heartbeat and play completion
+                SoundManager.shared.stopHeartbeat()
+                HapticManager.shared.error()
+                SoundManager.shared.play(.convergenceComplete)
             }
         }
     }

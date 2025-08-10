@@ -321,8 +321,9 @@ struct IntegrationView: View {
             hasSubmitted = true
         }
         
-        // Play haptic feedback
-        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        // Sensory feedback for sealing
+        HapticManager.shared.mediumImpact()
+        SoundManager.shared.play(.integrationSeal)
         
         // Always start checking for partner's submission
         // This handles both sync (connected) and async (pending) cases

@@ -140,6 +140,38 @@ This is a phased plan focused on iterative development, testing, and risk mitiga
 - [x] **Lead Engineer:** Create the initial Xcode project, configure dependencies (NoiseKit, Firebase SDKs), and set up the MVVM architecture shell
 - [x] **Designer:** Finalize the Design System Tokens for the "Normie Mode" UI in Figma
 
+### Audio Assets Required
+
+The app includes a comprehensive SoundManager system that will automatically play sound effects when the following audio files are added to the project bundle:
+
+#### Connection & Messaging Sounds
+- `connection_sealed.m4a` - Plays when P2P handshake completes
+- `message_received.m4a` - Subtle sound for incoming messages
+- `message_sent.m4a` - Confirmation sound for sent messages
+
+#### ANIMA & Rewards
+- `anima_awarded.m4a` - Celebration sound when ANIMA is earned
+- `anima_celebration.m4a` - Enhanced celebration for large ANIMA amounts
+- `sacred_chime.m4a` - Additional chime for 100+ ANIMA awards
+
+#### Convergence & Integration
+- `convergence_begin.m4a` - Start of in-person meeting phase
+- `convergence_warning.m4a` - Warning when countdown reaches 10 seconds
+- `convergence_complete.m4a` - Timer expiration sound
+- `integration_seal.m4a` - Sealing the reflection offering
+- `offering_complete.m4a` - Integration completion
+
+#### UI & Feedback
+- `button_tap.m4a` - General button interaction
+- `transition_whoosh.m4a` - Screen transition effect
+- `warning_bell.m4a` - General warning sound
+- `error_tone.m4a` - Error feedback
+
+#### Ambient Sounds (Looping)
+- `heartbeat.m4a` - Plays during final 10 seconds of Convergence countdown
+
+**Note:** The app will function without these sound files, falling back to haptic feedback only. Supported formats: .m4a (preferred), .mp3, .wav, .aiff, .caf
+
 ### Phase 1: The Core Container
 - [x] **Lead Engineer:** Implement device discovery and session management using the Multipeer Connectivity framework
 - [x] **Lead Engineer:** Integrate the Noise Protocol for the E2E encrypted handshake and message transport

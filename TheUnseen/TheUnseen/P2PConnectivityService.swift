@@ -283,6 +283,10 @@ class P2PConnectivityService: NSObject, ObservableObject {
                     self.messages.append(ChatMessage(text: decryptedText))
                     self.receivedMessageCount += 1
                     self.checkMeaningfulInteraction()
+                    
+                    // Light haptic for received message
+                    HapticManager.shared.lightImpact()
+                    SoundManager.shared.play(.messageReceived, volume: 0.3)
                 }
             }
         } else {
@@ -310,6 +314,10 @@ class P2PConnectivityService: NSObject, ObservableObject {
                     // Don't start timer yet - wait for journey to be established
                     print("Handshake complete. Ready for journey.")
                     // Do NOT award ANIMA here - wait for meaningful interaction
+                    
+                    // Sensory feedback for connection
+                    HapticManager.shared.connectionEstablished()
+                    SoundManager.shared.playConnectionSequence()
                 }
             }
         }
