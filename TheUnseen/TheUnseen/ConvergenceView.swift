@@ -20,6 +20,7 @@ struct ConvergenceView: View {
     @State private var cooldownTimer: Timer?
     @State private var integrationAvailable = false
     @State private var partnerFirebaseUID: String? = nil
+    @State private var timerPulse = false
     
     var isInitiator: Bool {
         p2pService.myPeerID.displayName < (p2pService.connectedPeer?.displayName ?? "")
@@ -53,31 +54,73 @@ struct ConvergenceView: View {
                 }
                 .padding()
             
-            // Timer
+            // Enhanced animated timer
             ZStack {
+                // Outer glow effect
                 Circle()
-                    .stroke(DesignSystem.Colors.textTertiary.opacity(0.2), lineWidth: 4)
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                DesignSystem.Colors.accentPrimary.opacity(0.2),
+                                .clear
+                            ],
+                            center: .center,
+                            startRadius: 40,
+                            endRadius: 80
+                        )
+                    )
+                    .frame(width: 160, height: 160)
+                    .scaleEffect(timerPulse ? 1.1 : 1.0)
+                    .opacity(timerPulse ? 0.3 : 0.1)
+                    .animation(
+                        .easeInOut(duration: 2)
+                        .repeatForever(autoreverses: true),
+                        value: timerPulse
+                    )
+                
+                // Background track
+                Circle()
+                    .stroke(DesignSystem.Colors.textTertiary.opacity(0.2), lineWidth: 6)
                     .frame(width: 120, height: 120)
                 
+                // Progress ring
                 Circle()
                     .trim(from: 0, to: Double(timeRemaining) / DeveloperSettings.shared.convergenceDuration)
                     .stroke(
                         DesignSystem.Colors.twilightGradient,
-                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                        style: StrokeStyle(lineWidth: 6, lineCap: .round)
                     )
                     .frame(width: 120, height: 120)
                     .rotationEffect(.degrees(-90))
                     .animation(.linear(duration: 1), value: timeRemaining)
+                    .shadow(color: DesignSystem.Colors.accentPrimary.opacity(0.3), radius: 4)
                 
+                // Pulse indicator at progress end
+                Circle()
+                    .fill(DesignSystem.Colors.accentPrimary)
+                    .frame(width: 12, height: 12)
+                    .offset(y: -60)
+                    .rotationEffect(.degrees(360 * (1 - Double(timeRemaining) / DeveloperSettings.shared.convergenceDuration) - 90))
+                    .animation(.linear(duration: 1), value: timeRemaining)
+                    .shadow(color: DesignSystem.Colors.accentPrimary, radius: 4)
+                
+                // Timer text
                 VStack(spacing: 4) {
                     Text(formattedTime)
                         .font(DesignSystem.Typography.technical(28))
+                        .foregroundColor(timeRemaining <= 30 ? DesignSystem.Colors.warning : DesignSystem.Colors.textPrimary)
+                        .contentTransition(.numericText())
+                        .animation(.spring(response: 0.3), value: timeRemaining)
+                    
                     Text("remaining")
                         .font(DesignSystem.Typography.caption(DesignSystem.Typography.captionSmall))
                         .foregroundColor(DesignSystem.Colors.textSecondary)
                 }
             }
             .padding(.vertical, 20)
+            .onAppear {
+                timerPulse = true
+            }
             
             // Convergence Prompt with mythology voice
             if let prompt = promptsService.currentPrompt {

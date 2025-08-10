@@ -86,7 +86,12 @@ struct PathLaunchView: View {
                             .font(.system(size: 18, weight: .light))
                             .foregroundColor(.primary)
                             .multilineTextAlignment(.center)
-                            .animation(.easeInOut, value: connectionStatus)
+                            .id(connectionStatus) // Force new view for each status
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.95)),
+                                removal: .opacity.combined(with: .scale(scale: 1.05))
+                            ))
+                            .animation(.easeInOut(duration: 0.4), value: connectionStatus)
                     }
                     
                     Spacer()
@@ -263,7 +268,9 @@ struct PathLaunchView: View {
         }
         .onReceive(p2pService.$connectedPeer) { peer in
             if peer != nil {
-                connectionStatus = Mythology.Status.connected + "\n" + Mythology.Status.integrationReady
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    connectionStatus = Mythology.Status.connected + "\n" + Mythology.Status.integrationReady
+                }
                 
                 // Stop discovery once connected (save battery)
                 p2pService.stopDiscovery()
@@ -277,7 +284,9 @@ struct PathLaunchView: View {
             } else {
                 // Peer disconnected, reset the state
                 isSearching = false
-                connectionStatus = Mythology.Instructions.beginPath
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    connectionStatus = Mythology.Instructions.beginPath
+                }
                 showChat = false
                 
                 // Make sure discovery is stopped
@@ -287,7 +296,9 @@ struct PathLaunchView: View {
         .onReceive(p2pService.$isHandshakeComplete) { complete in
             if complete && !showChat {
                 // Handshake complete, prepare for interaction
-                connectionStatus = Mythology.Status.connecting
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    connectionStatus = Mythology.Status.connecting
+                }
             }
         }
     }
@@ -304,7 +315,9 @@ struct PathLaunchView: View {
     
     private func startSearching() {
         isSearching = true
-        connectionStatus = Mythology.Status.searching
+        withAnimation(.easeInOut(duration: 0.4)) {
+            connectionStatus = Mythology.Status.searching
+        }
         
         // Always start discovery when user clicks the button
         // This gives users control over when they want to connect

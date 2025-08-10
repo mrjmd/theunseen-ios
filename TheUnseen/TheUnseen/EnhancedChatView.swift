@@ -67,18 +67,25 @@ struct EnhancedChatView: View {
             // Messages list
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 8) {
                         ForEach(displayedMessages) { msg in
-                            MessageBubble(message: msg)
-                                .id(msg.id)
+                            ChatBubble(
+                                message: msg,
+                                direction: msg.text.hasPrefix("You:") ? .sent : .received
+                            )
+                            .id(msg.id)
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.8).combined(with: .opacity),
+                                removal: .opacity
+                            ))
                         }
                     }
-                    .padding()
+                    .padding(.vertical)
                 }
                 .onChange(of: displayedMessages.count) { _, _ in
-                    // Scroll to bottom when new message arrives
+                    // Scroll to bottom when new message arrives with animation
                     if let lastMessage = displayedMessages.last {
-                        withAnimation {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             proxy.scrollTo(lastMessage.id, anchor: .bottom)
                         }
                     }
@@ -190,7 +197,9 @@ struct EnhancedChatView: View {
                 // Skip system messages (they start with [SYSTEM])
                 else if !lastMessage.text.hasPrefix("[SYSTEM]") && !displayedMessages.contains(where: { $0.id == lastMessage.id }) {
                     let displayMessage = ChatMessage(text: "Initiate: \(lastMessage.text)")
-                    displayedMessages.append(displayMessage)
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        displayedMessages.append(displayMessage)
+                    }
                     
                     // Mark that peer has responded to this prompt (only once per act)
                     if !peerHasRespondedToCurrentPrompt {
@@ -207,9 +216,11 @@ struct EnhancedChatView: View {
     private func sendMessage() {
         guard !messageText.isEmpty else { return }
         
-        // Add to local display
+        // Add to local display with animation
         let sentMessage = ChatMessage(text: "You: \(messageText)")
-        displayedMessages.append(sentMessage)
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            displayedMessages.append(sentMessage)
+        }
         
         // Send via P2P
         p2pService.sendMessage(messageText)
