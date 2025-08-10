@@ -53,12 +53,12 @@ struct IntegrationView: View {
                             .foregroundColor(.purple)
                             .symbolEffect(.pulse)
                         
-                        Text("The Integration")
+                        Text(Mythology.Titles.integration)
                             .font(.title2)
                             .fontWeight(.light)
                             .tracking(2)
                         
-                        Text("Alchemize your experience into wisdom")
+                        Text(Mythology.Instructions.integrationExplanation)
                             .font(.caption)
                             .foregroundColor(.gray)
                     }
@@ -152,7 +152,7 @@ struct IntegrationView: View {
                             // Presence Slider
                             SliderSection(
                                 title: "Presence",
-                                subtitle: "How present were you in the container?",
+                                subtitle: Mythology.Prompts.presenceQuestion,
                                 value: $presenceScore,
                                 symbolName: "flame",
                                 color: .orange
@@ -161,7 +161,7 @@ struct IntegrationView: View {
                             // Courage Slider
                             SliderSection(
                                 title: "Courage",
-                                subtitle: "How much courage did you bring to the interaction?",
+                                subtitle: Mythology.Prompts.courageQuestion,
                                 value: $courageScore,
                                 symbolName: "flame.fill",
                                 color: .red
@@ -170,7 +170,7 @@ struct IntegrationView: View {
                             // The Mirror Slider
                             SliderSection(
                                 title: "The Mirror",
-                                subtitle: "How clearly did you see yourself in them?",
+                                subtitle: Mythology.Prompts.resonanceQuestion,
                                 value: $mirrorScore,
                                 symbolName: "circle.hexagongrid.circle",
                                 color: .purple
@@ -183,7 +183,7 @@ struct IntegrationView: View {
                         Button(action: submitIntegration) {
                             HStack {
                                 Image(systemName: "seal.fill")
-                                Text("Seal the Offering")
+                                Text(Mythology.Actions.sealOffering)
                                 Image(systemName: "sparkles")
                             }
                             .foregroundColor(.white)
@@ -559,7 +559,7 @@ struct CompletionView: View {
             Spacer()
             
             Button(action: onComplete) {
-                Text("Return to the Path")
+                Text("Return to " + Mythology.Titles.thePath)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding()

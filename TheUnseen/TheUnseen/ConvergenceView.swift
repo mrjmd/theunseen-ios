@@ -42,12 +42,12 @@ struct ConvergenceView: View {
             VStack(spacing: 0) {
                 // Header
                 VStack(spacing: 8) {
-                    Text("The Convergence")
+                    Text(Mythology.Titles.convergence)
                         .font(.title2)
                         .fontWeight(.light)
                         .tracking(2)
                     
-                    Text("In-Person Container")
+                    Text(Mythology.Titles.meetup)
                         .font(.caption)
                         .foregroundColor(.gray)
                         .tracking(1)
@@ -165,7 +165,7 @@ struct ConvergenceView: View {
                             .font(.system(size: 50))
                             .foregroundColor(.purple)
                         
-                        Text("Session Complete")
+                        Text(Mythology.Status.convergenceActive)
                             .font(.title3)
                             .fontWeight(.light)
                         
@@ -196,7 +196,7 @@ struct ConvergenceView: View {
                             .padding(.horizontal)
                         
                         if integrationAvailable {
-                            Text("✨ Integration is now available")
+                            Text("✨ " + Mythology.Status.integrationReady)
                                 .font(.caption2)
                                 .foregroundColor(.green)
                                 .transition(.opacity.combined(with: .scale))
@@ -206,7 +206,7 @@ struct ConvergenceView: View {
                             }) {
                                 HStack {
                                     Image(systemName: "flame")
-                                    Text("Begin The Integration")
+                                    Text("Begin " + Mythology.Titles.integration)
                                     Image(systemName: "arrow.right")
                                 }
                                 .foregroundColor(.white)
@@ -244,7 +244,7 @@ struct ConvergenceView: View {
                         Button(action: {
                             disconnectAndReturn()
                         }) {
-                            Text("Return to the Path")
+                            Text("Return to " + Mythology.Titles.thePath)
                                 .foregroundColor(.purple)
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 10)
@@ -263,7 +263,7 @@ struct ConvergenceView: View {
                     }) {
                         HStack {
                             Image(systemName: "seal")
-                            Text("Create Shared Artifact")
+                            Text(Mythology.Placeholders.artifact)
                             Image(systemName: "arrow.right")
                         }
                         .foregroundColor(.white)
@@ -282,7 +282,7 @@ struct ConvergenceView: View {
                 } else if !isInitiator && !sessionComplete {
                     VStack(spacing: 12) {
                         ProgressView()
-                        Text("Waiting for shared artifact...")
+                        Text(Mythology.Status.waitingForResponse)
                             .font(.caption)
                             .foregroundColor(.gray)
                         Text("Your partner will create a quote or insight from your interaction")
@@ -313,7 +313,7 @@ struct ConvergenceView: View {
         .preferredColorScheme(.light) // Keep Level 1 in light mode
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button("Back to Path") {
+                Button(Mythology.Actions.exitPath) {
                     // Disconnect and return to main view
                     disconnectAndReturn()
                 }

@@ -87,7 +87,7 @@ struct EnhancedChatView: View {
             
             // Input area with sacred language
             HStack(spacing: 12) {
-                TextField("Speak what is true...", text: $messageText)
+                TextField(Mythology.Placeholders.chatInput, text: $messageText)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .onSubmit {
                         sendMessage()
@@ -104,7 +104,7 @@ struct EnhancedChatView: View {
             .background(Color(UIColor.systemBackground))
         }
         .navigationBarTitleDisplayMode(.inline)
-        .navigationTitle("The Container")
+        .navigationTitle(Mythology.Titles.sacredSpace)
         .preferredColorScheme(.light) // Force light mode for Level 1
         .toolbar {
             // Safety shield (production mode only)

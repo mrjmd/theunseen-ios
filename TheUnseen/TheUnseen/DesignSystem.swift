@@ -1,38 +1,71 @@
 import SwiftUI
 
-// MARK: - Design System
-// Centralized design constants for The Unseen
+// MARK: - Color Extension for Hex Support
+extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 3: // RGB (12-bit)
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6: // RGB (24-bit)
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: // ARGB (32-bit)
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (a, r, g, b) = (255, 0, 0, 0)
+        }
+        
+        self.init(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue:  Double(b) / 255,
+            opacity: Double(a) / 255
+        )
+    }
+}
 
-struct DesignSystem {
+// MARK: - Design System
+// Centralized design constants for The Unseen - "Normie Mode" Palette
+
+enum DesignSystem {
     
     // MARK: - Colors
-    struct Colors {
-        // Primary Palette - Monochrome base
-        static let primary = Color.black
-        static let secondary = Color.white
-        static let backgroundPrimary = Color.white
-        static let backgroundSecondary = Color.gray.opacity(0.05)
+    enum Colors {
+        // Normie Mode Palette - Intentionally mundane yet elegant
+        static let background = Color(hex: "F7F7F7") // Soft gray background
+        static let surface = Color.white
+        static let textPrimary = Color(hex: "1C1C1E") // Near black
+        static let textSecondary = Color(hex: "8A8A8E") // Gray
+        static let textTertiary = Color(hex: "C7C7CC") // Light gray
         
-        // Accent Colors - Deep twilight tones
-        static let accentPrimary = Color(red: 0.2, green: 0.1, blue: 0.3) // Deep purple
-        static let accentSecondary = Color(red: 0.1, green: 0.2, blue: 0.4) // Midnight blue
-        static let accentTertiary = Color(red: 0.3, green: 0.2, blue: 0.4) // Mystic violet
+        // Accent Colors - Subtle and approachable
+        static let accentPrimary = Color(hex: "007AFF") // Apple Blue
+        static let accentSecondary = Color(hex: "EAEAEA") // Light gray accent
+        static let accentDestructive = Color(hex: "FF3B30") // Apple Red
         
-        // Semantic Colors
-        static let success = Color(red: 0.2, green: 0.5, blue: 0.3) // Forest green
-        static let warning = Color(red: 0.7, green: 0.5, blue: 0.2) // Amber
-        static let danger = Color(red: 0.6, green: 0.2, blue: 0.2) // Deep red
+        // Message Bubbles
+        static let sentMessageBubble = Color(red: 0.9, green: 0.9, blue: 0.95)
+        static let receivedMessageBubble = Color(hex: "EAEAEA")
+        
+        // Status Colors
+        static let success = Color(hex: "34C759") // Apple Green
+        static let warning = Color(hex: "FF9500") // Apple Orange
+        static let danger = Color(hex: "FF3B30") // Apple Red
         
         // ANIMA Colors - For celebration
         static let animaGold = Color(red: 0.9, green: 0.7, blue: 0.3)
         static let animaSilver = Color(red: 0.7, green: 0.7, blue: 0.8)
         static let animaBronze = Color(red: 0.6, green: 0.4, blue: 0.3)
         
-        // Text Colors
-        static let textPrimary = Color.black
-        static let textSecondary = Color.gray
-        static let textTertiary = Color.gray.opacity(0.6)
+        // Additional Colors
         static let textOnDark = Color.white
+        static let primary = Color(hex: "007AFF") // Primary action color
+        static let accentTertiary = Color(hex: "5856D6") // Purple accent
+        static let backgroundSecondary = Color(hex: "F2F2F7") // Secondary background
         
         // Gradient Definitions
         static let twilightGradient = LinearGradient(
@@ -42,7 +75,7 @@ struct DesignSystem {
         )
         
         static let sacredGradient = LinearGradient(
-            colors: [accentPrimary.opacity(0.3), accentTertiary.opacity(0.3)],
+            colors: [accentPrimary.opacity(0.3), accentSecondary.opacity(0.3)],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -55,7 +88,7 @@ struct DesignSystem {
     }
     
     // MARK: - Typography
-    struct Typography {
+    enum Typography {
         // Font Sizes
         static let titleLarge: CGFloat = 32
         static let titleMedium: CGFloat = 24
@@ -100,7 +133,7 @@ struct DesignSystem {
     }
     
     // MARK: - Spacing
-    struct Spacing {
+    enum Spacing {
         static let xxSmall: CGFloat = 4
         static let xSmall: CGFloat = 8
         static let small: CGFloat = 12
@@ -112,7 +145,7 @@ struct DesignSystem {
     }
     
     // MARK: - Animation
-    struct Animation {
+    enum Animation {
         static let durationQuick: Double = 0.2
         static let durationNormal: Double = 0.3
         static let durationSlow: Double = 0.5
@@ -133,7 +166,7 @@ struct DesignSystem {
     }
     
     // MARK: - Shadows
-    struct Shadow {
+    enum Shadow {
         static let subtle = (color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
         static let medium = (color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
         static let strong = (color: Color.black.opacity(0.2), radius: 16, x: 0, y: 8)
@@ -141,7 +174,7 @@ struct DesignSystem {
     }
     
     // MARK: - Corner Radius
-    struct CornerRadius {
+    enum CornerRadius {
         static let small: CGFloat = 8
         static let medium: CGFloat = 12
         static let large: CGFloat = 16

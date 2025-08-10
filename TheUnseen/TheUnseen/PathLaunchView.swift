@@ -5,7 +5,7 @@ struct PathLaunchView: View {
     @EnvironmentObject var p2pService: P2PConnectivityService
     @EnvironmentObject var authService: AuthService
     @State private var isSearching = false
-    @State private var connectionStatus = "Ready to begin"
+    @State private var connectionStatus = Mythology.Instructions.beginPath
     @State private var showChat = false
     @State private var pulseAnimation = false
     @State private var showDeveloperMenu = false
@@ -101,7 +101,7 @@ struct PathLaunchView: View {
                                         .scaleEffect(0.5)
                                         .tint(.purple)
                                 }
-                                Text(isSearching ? "SEEKING..." : "BEGIN THE PATH")
+                                Text(isSearching ? "SEEKING..." : Mythology.Actions.begin)
                                     .font(.system(size: 16, weight: .medium))
                                     .tracking(2)
                             }
@@ -130,7 +130,7 @@ struct PathLaunchView: View {
                                     HStack {
                                         Image(systemName: "flame.fill")
                                             .font(.system(size: 14))
-                                        Text("COMPLETE INTEGRATION")
+                                        Text("COMPLETE " + Mythology.Titles.integration.uppercased())
                                             .font(.system(size: 12, weight: .medium))
                                             .tracking(1.5)
                                         Image(systemName: "flame.fill")
@@ -188,7 +188,7 @@ struct PathLaunchView: View {
             .sheet(isPresented: $showDeveloperMenu) {
                 DeveloperMenuView()
             }
-            .alert("Incomplete Integration", isPresented: $showingIntegrationWarning) {
+            .alert("Incomplete " + Mythology.Titles.integration, isPresented: $showingIntegrationWarning) {
                 Button("Cancel", role: .cancel) { }
                 Button("Continue Anyway", role: .destructive) {
                     // Clear the pending Integration
@@ -263,7 +263,7 @@ struct PathLaunchView: View {
         }
         .onReceive(p2pService.$connectedPeer) { peer in
             if peer != nil {
-                connectionStatus = "Container established.\nThe Mirror is ready."
+                connectionStatus = Mythology.Status.connected + "\n" + Mythology.Status.integrationReady
                 
                 // Stop discovery once connected (save battery)
                 p2pService.stopDiscovery()
@@ -277,7 +277,7 @@ struct PathLaunchView: View {
             } else {
                 // Peer disconnected, reset the state
                 isSearching = false
-                connectionStatus = "Ready to begin"
+                connectionStatus = Mythology.Instructions.beginPath
                 showChat = false
                 
                 // Make sure discovery is stopped
@@ -287,7 +287,7 @@ struct PathLaunchView: View {
         .onReceive(p2pService.$isHandshakeComplete) { complete in
             if complete && !showChat {
                 // Handshake complete, prepare for interaction
-                connectionStatus = "Securing the container..."
+                connectionStatus = Mythology.Status.connecting
             }
         }
     }
@@ -304,7 +304,7 @@ struct PathLaunchView: View {
     
     private func startSearching() {
         isSearching = true
-        connectionStatus = "Seeking a fellow Initiate nearby..."
+        connectionStatus = Mythology.Status.searching
         
         // Always start discovery when user clicks the button
         // This gives users control over when they want to connect
